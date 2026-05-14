@@ -142,7 +142,7 @@ Each write is a read-modify-write of `.bugfix/runs/<ticket-id>.json`. The single
 
 ## Events
 
-Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <event> ci-watching '<detail-json>'`:
+Resolve `EVENTS_LOG="$(jq -r .artifacts.events_log_path .bugfix/runs/<ticket-id>.json)"` on entry, BEFORE the cd into `state.worktree_path`. The path is absolute (written by `bugfix:run-ticket` at state init); pass it to `events-append.sh` rather than constructing a relative `.bugfix/runs/...` path — once cwd is inside the worktree, relative paths resolve to phantom files that the driver and downstream stages never see. Emit via `bugfix/lib/events-append.sh "$EVENTS_LOG" <event> ci-watching '<detail-json>'`:
 
 - `ci_failed` — detail: `{"runs": [<failed run names>]}`. Emitted on the first `failure` observation per watch cycle.
 - `ci_fix_attempted` — detail: `{"attempt": <int 1..budget>, "files_changed": <int>}`. After the fix sub-agent's commit lands.

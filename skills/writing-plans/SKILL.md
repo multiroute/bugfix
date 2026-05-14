@@ -244,7 +244,7 @@ All writes are read-modify-write of `.bugfix/runs/<ticket-id>.json`. No write to
 
 ## Events
 
-Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <event> planning '<detail-json>'`:
+Resolve `EVENTS_LOG="$(jq -r .artifacts.events_log_path .bugfix/runs/<ticket-id>.json)"` on entry, BEFORE cd-ing into the (possibly newly created) worktree. The path is absolute (written by `bugfix:run-ticket` at state init); pass it to `events-append.sh` rather than constructing a relative `.bugfix/runs/...` path — relative paths break the audit log when the cwd is inside a worktree. Emitted via `bugfix/lib/events-append.sh "$EVENTS_LOG" <event> planning '<detail-json>'`:
 
 - `worktree_created` — detail: `{"branch": "<branch>", "base_sha": "<sha>"}`. After a fresh worktree is created and verified clean.
 - `worktree_reused` — detail: `{"path": "<absolute>", "branch": "<branch>"}`. Emitted instead of `worktree_created` when the planning step detects cwd is already inside an isolated git worktree (the operator pre-staged the workspace).
