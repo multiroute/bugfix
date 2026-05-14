@@ -48,9 +48,17 @@ for section in "## State writes" "## Events" "## Block-and-comment exits"; do
 done
 echo "OK  ## State writes / ## Events / ## Block-and-comment exits sections present"
 
-# R2-I7: Task 1 regression-test path must be declared explicitly via Files section.
-grep -qF -- "- Test:" "$SKILL" || { echo "FAIL writing-plans must require Task 1 to declare regression-test file path explicitly"; exit 1; }
-echo "OK  Task 1 explicit regression-test file declaration required"
+# R2-I7: Task 1 regression-test path must be declared explicitly via the
+# `**Regression test file:** <path>` marker that downstream stages parse.
+# The marker (literal string) MUST appear in the bug-class Task 1 example —
+# checking for `- Test:` alone is insufficient because that pattern also
+# appears in the generic upstream Task Structure template, so the assertion
+# would false-pass if the entire bug-class example block were deleted.
+grep -qF -- "**Regression test file:**" "$SKILL" \
+  || { echo "FAIL writing-plans bug-class Task 1 must show the explicit '**Regression test file:** <path>' marker that downstream stages parse"; exit 1; }
+grep -qF "Task 1 MUST be a failing regression test" "$SKILL" \
+  || { echo "FAIL writing-plans bug-class section missing mandatory regression-test rule"; exit 1; }
+echo "OK  Task 1 explicit regression-test file declaration required (marker + prose pinned)"
 
 # C6: lock acquisition must precede side-effects.
 grep -qiF "Lock first, side-effects second" "$SKILL" || { echo "FAIL writing-plans must enforce lock-first-side-effects-second ordering"; exit 1; }

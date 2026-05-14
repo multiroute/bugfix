@@ -91,8 +91,12 @@ Example Task 1 shape (substitute the bug's actual repro):
 
 ### Task 1: Regression test for <one-line bug description>
 
+**Regression test file:** `tests/<path>/test_<bug>.py`
+
 **Files:**
 - Test: `tests/<path>/test_<bug>.py`
+
+The leading `**Regression test file:** <path>` declaration above is **mandatory** for every bug-class Task 1. Downstream stages (`bugfix:executing-plan`, `bugfix:ci-watchdog`, `bugfix:pr-final-review`) parse this line to discover the canonical regression-test path — the diff heuristic was removed because it was fragile when Task 1 touched multiple files. If a bug-class plan omits this declaration, `bugfix:executing-plan` will exit via `bugfix:block-and-comment(tech-failure)`.
 
 - [ ] **Step 1: Write the failing regression test**
 
