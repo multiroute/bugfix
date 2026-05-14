@@ -166,6 +166,20 @@ gh issue view "<issue_number>" --json title,body,state,labels,comments
 - exit 404 (issue not found) -> `{ "error": "issue <issue_number> not found" }`
 - any other non-zero exit -> `{ "error": "<captured stderr>" }`
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+# Pseudocode — concrete tool calls depend on the MCP server's exact op surface.
+issue    = mcp__github__get_issue(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>)
+comments = mcp__github__get_issue_comments(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>)
+```
+
+Merge into the same `{title, body, labels, status, comments[]}` shape as the gh path. Apply the same `<untrusted-input>` wrapping to `title`, `body`, and every `comments[].body` (and `comments[].author_login` per the rule below). Derive `is_bot` per the Bot-author detection section.
+
+On any MCP error (tool unavailable, network, permission), return `{"error": "<message>"}` — same shape as the gh-path error contract.
+
 ### ticket_comment
 
 **Signature:** `ticket_comment(issue_number, body) -> {comment_id}`
@@ -184,6 +198,16 @@ gh issue comment "<issue_number>" --body-file -
 **Untrusted-input handling:** N/A (input is bot-authored; output has no ticket-quoted text).
 
 **Errors:** non-zero exit -> `{ "error": "<captured stderr>" }`. Note: GitHub caps comment body at ~65536 chars; the adapter does NOT truncate - the caller is responsible for staying under the limit.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+result = mcp__github__add_issue_comment(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>, body=<body>)
+```
+
+Return `{"comment_id": <result.id>}`. The MCP server returns the comment's numeric ID; convert to string for shape parity with the gh path. Same body-length cap (~65536 chars) — caller's responsibility, not adapter-side truncation.
 
 ### set_status
 
@@ -237,6 +261,30 @@ The `--remove-label` list MUST contain all three non-target labels for every sta
 
 **Errors:** non-zero on `gh issue edit` -> `{ "error": "<stderr>" }`. With auto-create above, the historical "label not found" path should not fire; if it does (e.g., auth missing), the caller treats it as any other adapter error.
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+# 1. Ensure the four bugfix-status:* labels exist. MCP server exposes label creation:
+for name, color, desc in [
+  ("bugfix-status:in-progress",     "0e8a16", "bugfix loop actively working"),
+  ("bugfix-status:needs-info",      "fbca04", "bugfix loop paused, needs human input"),
+  ("bugfix-status:rejected",        "b60205", "bugfix loop rejected this ticket"),
+  ("bugfix-status:ready-for-merge", "1d76db", "bugfix loop completed review; ready for human merge"),
+]:
+  try: mcp__github__create_label(owner=<state.owner>, repo=<state.repo>, name=name, color=color, description=desc)
+  except AlreadyExists: pass
+
+# 2. Read current labels, remove any other bugfix-status:* label, add the new one.
+issue = mcp__github__get_issue(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>)
+new_labels = [l for l in issue.labels if not l.startswith("bugfix-status:")]
+new_labels.append("bugfix-status:" + <status>)
+mcp__github__update_issue(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>, labels=new_labels)
+```
+
+Return `{"ok": true}`. If `mcp__github__create_label` is not exposed by the MCP server, the adapter assumes the labels were pre-created (see README first-run setup) and proceeds to step 2; if step 2 fails because a label is missing, return `{"error": "label <name> not found — please run first-run setup"}`.
+
 ### list_ready
 
 **Signature:** `list_ready(label) -> [<int>, <int>, ...]` (raw issue numbers).
@@ -254,6 +302,16 @@ gh issue list --label "<label>" --state open --json number,title
 **Asymmetry vs. parent spec §6.2:** the parent contract names the return type `ticket_ids[]` (i.e., `<owner>-<repo>-<number>` strings). The adapter intentionally returns *raw numbers* because the adapter doesn't know its own owner/repo context. The caller (a stage skill that knows the repo it's running in) composes the full `<owner>-<repo>-<number>` ticket id.
 
 **Errors:** non-zero exit -> caller should treat as empty list and surface the stderr.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+issues = mcp__github__list_issues(owner=<state.owner>, repo=<state.repo>, labels=[<label>], state="open")
+```
+
+Return the list of `issue.number` integers. Same charset constraint on `<label>` as the gh path.
 
 ### push
 

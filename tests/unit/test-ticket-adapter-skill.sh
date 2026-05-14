@@ -141,4 +141,10 @@ echo "OK  ci_status classifies cancelled/timed_out/action_required as failure"
 grep -qi "stable\|drop-in replacement" "$SKILL" || { echo "FAIL missing forward-compat note about stable contract"; exit 1; }
 echo "OK  forward-compatibility note present"
 
+# MCP paths for issue operations must document mcp__github__ tool names.
+for mcp_op in "mcp__github__get_issue" "mcp__github__add_issue_comment" "mcp__github__update_issue" "mcp__github__list_issues"; do
+  grep -qF "$mcp_op" "$SKILL" || { echo "FAIL adapter missing MCP op: $mcp_op"; exit 1; }
+done
+echo "OK  MCP issue-op tools documented (get_issue, add_issue_comment, update_issue, list_issues)"
+
 echo "PASS"
