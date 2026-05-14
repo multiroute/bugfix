@@ -75,13 +75,14 @@ for f in \
   spec-reviewer-prompt.md \
   code-quality-reviewer-prompt.md \
   implementer-retry-prompt.md \
-  plan-document-reviewer-prompt.md
+  plan-document-reviewer-prompt.md \
+  pr-final-reviewer-prompt.md
 do
   if ! grep -qiE "untrusted-input|<untrusted-input>" "$PROMPTS/$f"; then
     echo "FAIL $f missing untrusted-input preamble"
     exit 1
   fi
 done
-echo "OK  all 5 implementer/reviewer prompts include untrusted-input preamble"
+echo "OK  all 6 implementer/reviewer prompts include untrusted-input preamble"
 
 echo "PASS"

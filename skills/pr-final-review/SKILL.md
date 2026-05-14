@@ -32,7 +32,7 @@ Outcomes:
 
 ## Step 2: Gather inputs for the reviewer
 
-Read these into structured variables for substitution into the reviewer prompts:
+Read these into structured variables for substitution into the reviewer prompt:
 
 - **ticket_body:** call `bugfix:ticket-adapter:read(state.issue_number)`; extract `body` (which the adapter has already wrapped in `<untrusted-input>` tags). Do NOT strip the tags.
 - **spec_contents:** `cat state.spec_path`.
@@ -42,7 +42,7 @@ Read these into structured variables for substitution into the reviewer prompts:
 - **regression_test_contents:** `cat <regression_test_path>` (if the path is non-empty).
 - **base_sha:** `state.base_sha`.
 - **pr_branch:** `state.branch`.
-- **ci_summary:** call `bugfix:ticket-adapter:ci_status(state.pr_number)`; expect `{status: "success", runs: [...]}` since `ci-watchdog` already confirmed green. **If `ci_summary.status != "success"`, exit via `bugfix:block-and-comment(tech-failure, reason="CI regressed between ci-watchdog and pr-final-review", artifacts=[ci_summary])` — do NOT proceed to reviewer dispatch.** Otherwise summarize as text for the reviewer prompts.
+- **ci_summary:** call `bugfix:ticket-adapter:ci_status(state.pr_number)`; expect `{status: "success", runs: [...]}` since `ci-watchdog` already confirmed green. **If `ci_summary.status != "success"`, exit via `bugfix:block-and-comment(tech-failure, reason="CI regressed between ci-watchdog and pr-final-review", artifacts=[ci_summary])` — do NOT proceed to reviewer dispatch.** Otherwise summarize as text for the reviewer prompt.
 
 Emit `pr_review_started` event (detail: `{}`).
 
@@ -53,7 +53,7 @@ Reviewers get the PR diff by calling the right tool for the active backend:
 - **When `state.artifacts.adapter_backend == "gh"`:** invoke `gh pr diff <state.pr_number>` via Bash. The output is plain unified diff.
 - **When `state.artifacts.adapter_backend == "mcp"`:** call `mcp__github__get_pull_request_files(owner=<state.owner>, repo=<state.repo>, pull_number=<state.pr_number>)` for the file list, then `mcp__github__get_pull_request_diff` (or the canonical MCP server's equivalent) for the unified diff body. Concatenate into the same format as the gh output.
 
-Both paths produce the same input shape for the reviewer prompts. Reviewers SHOULD NOT branch on backend themselves — this skill handles the routing once before dispatching.
+Both paths produce the same input shape for the reviewer prompt. The reviewer SHOULD NOT branch on backend itself — this skill handles the routing once before dispatching.
 
 ### Reviewer prompt branching by classification
 
@@ -186,7 +186,7 @@ All writes are read-modify-write of `.bugfix/runs/<ticket-id>.json`.
 Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <event> pr-reviewing '<detail-json>'`:
 
 - `pr_rebased` (detail: `{}`) — after successful rebase, before Step 2.
-- `pr_review_started` (detail: `{}`) — at the start of Step 3.
+- `pr_review_started` (detail: `{}`) — at the end of Step 2, immediately before reviewer dispatch.
 - `pr_merge_ready` (detail: `{verdict: <"clean" | "important">}`) — terminal merge-ready outcome.
 - `pr_closed` (detail: `{critical_findings: <count>, important_promoted: <bool>}`) — terminal pr-closed outcome, emitted BEFORE block-and-comment's `block_and_comment` event.
 
