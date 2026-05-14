@@ -97,6 +97,8 @@ The `intake_started` event is emitted only by the invocation that won the noclob
 The driver inlines all per-iteration logic (the former separate stage-dispatch skill has been removed and its logic folded in here):
 
 ```
+no_change_prev_iter = false  // initialized so the stall guard's first iteration never trips
+
 for iteration in 1..100:
   read state from .bugfix/runs/<ticket_id>.json
 
