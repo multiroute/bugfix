@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# PostToolUse hook for the bugfix plugin.
+# Emits a systemMessage when an orchestration skill is invoked, reminding
+# the agent to dispatch through bugfix:resume-run rather than inlining stage work.
+set -uo pipefail
+
+event="$(cat 2>/dev/null || true)"
+[[ -n "$event" ]] || exit 0
+
+tool_name="$(printf '%s' "$event" | jq -r '.tool_name // empty' 2>/dev/null || true)"
+[[ "$tool_name" == "Skill" ]] || exit 0
+
+skill="$(printf '%s' "$event" | jq -r '.tool_input.skill // empty' 2>/dev/null || true)"
+[[ -n "$skill" ]] || exit 0
+
+case "$skill" in
+  bugfix:run-ticket|bugfix:ticket-intake|bugfix:writing-plans|bugfix:executing-plan|bugfix:autonomous-finishing|bugfix:ci-watchdog|bugfix:pr-final-review)
+    jq -nc --arg s "$skill" '{
+      systemMessage: ("You just invoked `" + $s + "`. The bugfix loop'"'"'s only dispatcher is `bugfix:resume-run` — your next tool call MUST be `Skill: bugfix:resume-run` with the active ticket_id. Do NOT invoke another stage skill directly, and do NOT inline stage-specific work (writing files, running tests, pushing branches) outside the dispatcher loop.")
+    }'
+    ;;
+  *)
+    exit 0
+    ;;
+esac
