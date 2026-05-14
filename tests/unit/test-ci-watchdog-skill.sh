@@ -80,4 +80,13 @@ grep -qiE "fix sub-agent.*implementer|implementer.*fix sub-agent" "$SKILL" \
   || { echo "FAIL ci-watchdog must clarify that the fix sub-agent runs at implementer tier (NOT haiku)"; exit 1; }
 echo "OK  Haiku recommendation for controller + implementer tier for fix sub-agent documented"
 
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
 echo "PASS"

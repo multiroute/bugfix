@@ -42,4 +42,13 @@ grep -qiF "refuses to proceed" "$SKILL" || grep -qiF "refuse to proceed" "$SKILL
   || { echo "FAIL must document refusal on failing tests"; exit 1; }
 echo "OK  test-failure refusal documented"
 
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
 echo "PASS"

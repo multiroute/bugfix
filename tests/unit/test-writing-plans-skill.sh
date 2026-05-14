@@ -75,4 +75,13 @@ echo "OK  already-in-worktree detection documented (no spurious sibling worktree
 grep -qF ".bugfix/plans/<ticket-id>.md" "$SKILL" || { echo "FAIL bugfix plan path missing"; exit 1; }
 echo "OK  bugfix plan path is .bugfix/plans/<ticket-id>.md"
 
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
 echo "PASS"

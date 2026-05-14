@@ -376,3 +376,12 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 | Code-quality reviewer flags issues | Same implementer fixes | **Fresh implementer**, bigger model | `bugfix:block-and-comment(tech-failure)` |
 
 Retry budgets read from `config.retry_budgets.spec_review` (default 2) and `config.retry_budgets.code_quality_review` (default 2).
+
+## STAGE COMPLETE — STOP HERE
+
+Your work as the `executing-plan` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+- Start the next stage's work inline.
+- Read files relevant to the next stage.
+- Implement / test / push / open PRs beyond this stage's documented operations.
+
+If you continue past this point, you violate the loop contract. The PostToolUse hook will surface a reminder; ignoring it compounds the violation.

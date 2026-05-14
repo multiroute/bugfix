@@ -112,3 +112,12 @@ After block-and-comment runs, do NOT advance `current_stage`. Release the lock a
 ## Next stage
 
 On success: write `state.current_stage = "planning"`, release the lock via `bugfix/lib/lock-release.sh`, exit. `resume-run` will dispatch `bugfix:writing-plans` on its next invocation.
+
+## STAGE COMPLETE — STOP HERE
+
+Your work as the `ticket-intake` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+- Start the next stage's work inline.
+- Read files relevant to the next stage.
+- Implement / test / push / open PRs beyond this stage's documented operations.
+
+If you continue past this point, you violate the loop contract. The PostToolUse hook will surface a reminder; ignoring it compounds the violation.

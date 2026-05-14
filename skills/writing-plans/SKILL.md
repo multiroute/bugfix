@@ -231,3 +231,12 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 ## Execution Handoff
 
 In the bugfix autonomous loop this skill does NOT ask the user which execution mode to use — `bugfix:resume-run` always dispatches `bugfix:executing-plan` after the plan is reviewed and `current_stage` advances to `executing`. Do NOT pause to offer "Subagent-Driven vs Inline Execution" choices; those upstream options are not exposed in the autonomous loop. The autonomous flow continues automatically via the loop's state-file-first dispatch.
+
+## STAGE COMPLETE — STOP HERE
+
+Your work as the `writing-plans` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+- Start the next stage's work inline.
+- Read files relevant to the next stage.
+- Implement / test / push / open PRs beyond this stage's documented operations.
+
+If you continue past this point, you violate the loop contract. The PostToolUse hook will surface a reminder; ignoring it compounds the violation.

@@ -174,3 +174,12 @@ For hosts that can't afford long-held sessions (`ci_watch` ties up the worktree 
 3. `resume-run` re-dispatches `ci-watchdog`, which reads `state.next_poll_at`, takes a fresh snapshot, and either advances or blocks again.
 
 This mode requires (a) `next_poll_at` field in the run-state schema (not in v1) and (b) host-side scheduling. v1 ships the `ci_watch` long-poll as the only mode; the schedule-and-resume hooks are forward-compatibility documentation, not a runtime option.
+
+## STAGE COMPLETE — STOP HERE
+
+Your work as the `ci-watchdog` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+- Start the next stage's work inline.
+- Read files relevant to the next stage.
+- Implement / test / push / open PRs beyond this stage's documented operations.
+
+If you continue past this point, you violate the loop contract. The PostToolUse hook will surface a reminder; ignoring it compounds the violation.

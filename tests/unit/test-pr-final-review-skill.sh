@@ -94,4 +94,13 @@ grep -qF "advocate **explicitly counters**" "$SKILL" || { echo "FAIL row 4 must 
 grep -qF "advocate **disputes or silent**"  "$SKILL" || { echo "FAIL row 5 must catch disputes-or-silent"; exit 1; }
 echo "OK  decision-rule rows 4 and 5 distinguish explicit-counter vs disputes-or-silent"
 
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
 echo "PASS"
