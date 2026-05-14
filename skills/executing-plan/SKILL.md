@@ -387,7 +387,7 @@ Retry budgets read from `config.retry_budgets.spec_review` (default 2) and `conf
 
 ## STAGE COMPLETE — STOP HERE
 
-Your work as the `executing-plan` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+Your work as the `executing-plan` stage is done. You MUST stop here. Your next action MUST be to resume the next iteration of `bugfix:run-ticket`'s driver loop (read the state file, check terminal/blocked, let the loop dispatch the next stage). Do NOT:
 - Start the next stage's work inline.
 - Read files relevant to the next stage.
 - Implement / test / push / open PRs beyond this stage's documented operations.

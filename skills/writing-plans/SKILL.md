@@ -28,9 +28,9 @@ This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "plann
      - `state.base_sha = "$(git merge-base HEAD "origin/$state.base_branch" 2>/dev/null || git rev-parse HEAD)"` (commit we branched off; falls back to HEAD if no merge base exists, which would be unusual).
      - Verify the test baseline is clean (`git status --porcelain` empty). If dirty, exit via `bugfix:block-and-comment(tech-failure, reason="ticket worktree is not clean — cannot start planning with uncommitted changes")`.
      - Emit `worktree_reused` event (detail: `{"path": "<state.worktree_path>", "branch": "<state.branch>"}`).
-   - **If `in_worktree=false`:** inline-invoke `bugfix:using-git-worktrees` to create `.worktrees/<ticket-id>` from `state.base_branch`, verify clean test baseline. Record `state.worktree_path`, `state.branch`, and `state.base_sha`. Emit `worktree_created` event.
+   - **If `in_worktree=false`:** inline-invoke `bugfix:using-git-worktrees` to create `.worktrees/<ticket-id>` from `state.base_branch`, verify clean test baseline. Record `state.worktree_path` (absolute — resolve the created worktree's path with `$(pwd)` after cd-ing into it, to match the in-worktree branch's convention), `state.branch`, and `state.base_sha`. Emit `worktree_created` event.
 
-4. Continue with planning (per the body below). **Save the plan to `.bugfix/plans/<ticket-id>.md`** — the bugfix runtime keeps operational data under `.bugfix/`, NOT under `docs/superpowers/plans/` (that path is for upstream feature workflows). The upstream "Save plans to:" guidance later in this skill body is overridden by this rule for bug-fix runs.
+4. Continue with planning (per the body below). **Save the plan to `.bugfix/plans/<ticket-id>.md`** — the bugfix runtime keeps operational data under `.bugfix/`, NOT under `docs/superpowers/plans/` (that path is for upstream feature workflows). Ensure `.bugfix/plans/` exists before writing (`mkdir -p .bugfix/plans/`). The upstream "Save plans to:" guidance later in this skill body is overridden by this rule for bug-fix runs.
 5. After plan review passes (see "Mandatory plan review" section below), set `state.plan_path = ".bugfix/plans/<ticket-id>.md"` and `state.current_stage = "executing"`, emit `plan_reviewed` event, exit.
 
 If anything fails before the plan is reviewed, exit via `bugfix:block-and-comment` with the appropriate `exit_kind` (`needs-info` for spec ambiguity, `tech-failure` for tooling errors).
@@ -232,7 +232,7 @@ After "Plan compliant":
 
 Inside the planning stage:
 
-- `state.worktree_path = ".worktrees/<ticket-id>"` (after worktree creation).
+- `state.worktree_path = "<absolute path to the worktree>"` (after worktree creation; absolute is unambiguous and matches what the in-worktree branch writes via `$(pwd)`).
 - `state.branch = "<branch name created by using-git-worktrees>"`.
 - `state.base_sha = "<commit at base of worktree>"`.
 - `state.plan_path = ".bugfix/plans/<ticket-id>.md"` (after plan review passes).
@@ -266,7 +266,7 @@ In the bugfix autonomous loop this skill does NOT ask the user which execution m
 
 ## STAGE COMPLETE — STOP HERE
 
-Your work as the `writing-plans` stage is done. You MUST stop here. Your next action MUST be to return control to `bugfix:run-ticket`'s driver loop. Do NOT:
+Your work as the `writing-plans` stage is done. You MUST stop here. Your next action MUST be to resume the next iteration of `bugfix:run-ticket`'s driver loop (read the state file, check terminal/blocked, let the loop dispatch the next stage). Do NOT:
 - Start the next stage's work inline.
 - Read files relevant to the next stage.
 - Implement / test / push / open PRs beyond this stage's documented operations.

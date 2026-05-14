@@ -26,7 +26,7 @@ At the top of every operation, check `state.artifacts.adapter_backend`:
 
 ### Per-op subsection convention
 
-Each of the 11 per-op subsections below (`### read`, `### ticket_comment`, ..., `### rebase_pr`) documents BOTH backends. The gh path is the existing default content. The MCP path appears as a `#### MCP path` subsection within each op, introduced by:
+Each of the 11 per-op subsections below (`### read`, `### ticket_comment`, ..., `### rebase_pr`) is documented in this skill. 10 of them gain a `#### MCP path` subsection alongside the existing `gh` path (every op except `push`, which uses plain git on both backends). The gh path is the existing default content. The MCP path appears as a `#### MCP path` subsection within each op, introduced by:
 
 > When `state.artifacts.adapter_backend == "mcp"`:
 

@@ -17,11 +17,11 @@ The bugfix plugin runs an autonomous bug-fix loop: ticket -> spec -> plan -> imp
 
 ## Loop discipline
 
-The loop has exactly one dispatcher: `bugfix:run-ticket`'s driver loop. Stage skills (`ticket-intake`, `writing-plans`, `executing-plan`, `autonomous-finishing`, `ci-watchdog`, `pr-final-review`) are invoked BY the driver loop, never by the agent directly.
+The loop has exactly one dispatcher: `bugfix:run-ticket`'s driver loop. Stage skills (`ticket-intake`, `writing-plans`, `executing-plan`, `autonomous-finishing`, `ci-watchdog`, `pr-final-review`) run ONLY as iterations of that loop. The agent invokes each stage skill via the `Skill` tool at the loop's direction — never out of band, and never to do stage-specific work without entering the stage skill first.
 
-You MUST NOT invoke a stage skill via the `Skill` tool yourself. You MUST NOT inline a stage's work (writing files, running tests, pushing branches) outside the dispatcher loop. Doing either violates the loop contract.
+You MUST NOT invoke a stage skill outside of `bugfix:run-ticket`'s loop body. You MUST NOT inline a stage's work (writing files, running tests, pushing branches) yourself — let the stage skill do it. Doing either violates the loop contract.
 
-If you have data in context and feel the urge to skip the dispatcher and "just finish the work," STOP. That instinct is the failure mode the loop is designed to prevent. The PostToolUse hook will emit a reminder after each orchestration-skill invocation, pointing you back at `bugfix:run-ticket`. Honor it.
+If you have data in context and feel the urge to skip the dispatcher and "just finish the work," STOP. That instinct is the failure mode the loop is designed to prevent. The PostToolUse hook will emit a reminder after each stage-skill invocation, telling you to resume the next iteration of the driver loop. Honor it.
 
 ## Instruction priority
 

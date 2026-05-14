@@ -35,7 +35,7 @@ fence_re = re.compile(r"^```", re.M)
 
 # Limit to stage skill files (those that render templates at runtime).
 stage_skills = [
-    "using-bugfix", "run-ticket", "resume-run",
+    "using-bugfix", "run-ticket",
     "ticket-intake", "writing-plans", "executing-plan",
     "autonomous-finishing", "ci-watchdog", "pr-final-review",
     "ticket-adapter", "block-and-comment",

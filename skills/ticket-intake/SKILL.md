@@ -38,7 +38,7 @@ The classification is recorded at `state.artifacts.intake_classification`.
 
 ## Spec authoring
 
-For `classification == "bug"` OR `classification == "improvement"`. Write the spec file at `.bugfix/specs/<ticket_id>.md`. The template branches on classification — both share the frontmatter, Problem statement, and Untrusted-input note; the middle sections differ.
+For `classification == "bug"` OR `classification == "improvement"`. Write the spec file at `.bugfix/specs/<ticket_id>.md`. Ensure `.bugfix/specs/` exists before writing (`mkdir -p .bugfix/specs/`). The template branches on classification — both share the frontmatter, Problem statement, and Untrusted-input note; the middle sections differ.
 
 ### Bug-spec template (classification == "bug")
 
@@ -152,7 +152,7 @@ On success (for bugs OR improvements): write `state.current_stage = "planning"`,
 
 ## STAGE COMPLETE — STOP HERE
 
-Your work as the `ticket-intake` stage is done. You MUST stop here. Your next action MUST be to return control to `bugfix:run-ticket`'s driver loop. Do NOT:
+Your work as the `ticket-intake` stage is done. You MUST stop here. Your next action MUST be to resume the next iteration of `bugfix:run-ticket`'s driver loop (read the state file, check terminal/blocked, let the loop dispatch the next stage). Do NOT:
 - Start the next stage's work inline.
 - Read files relevant to the next stage.
 - Implement / test / push / open PRs beyond this stage's documented operations.
