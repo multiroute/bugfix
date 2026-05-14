@@ -23,7 +23,7 @@ The skill detects the test command using these heuristics (in order):
 
 1. If `package.json` exists with a `test` script: `npm test`
 2. If `Cargo.toml` exists: `cargo test`
-3. If `pyproject.toml` exists with `pytest`: `pytest`
+3. If `pyproject.toml` exists with `pytest`: `uv run pytest` (run `uv sync` first if `.venv` is missing)
 4. If `go.mod` exists: `go test ./...`
 5. If `Makefile` has a `test` target: `make test`
 6. Else: refuse to proceed via `bugfix:block-and-comment(tech-failure, reason="could not detect a test command")`.

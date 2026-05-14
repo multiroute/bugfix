@@ -42,6 +42,16 @@ If anything in the task or the previous verdict is unclear, ask before starting 
 
 If you encounter something unexpected, pause and clarify. Don't guess.
 
+## Environment & Test Commands
+
+Detect the project's tooling from files in the working directory; do NOT improvise:
+
+- **Python projects using uv** (look for `uv.lock`, or `pyproject.toml` with `[tool.uv]`): install deps with `uv sync`, run tests with `uv run pytest ...`. Do NOT activate `.venv` directly, do NOT invoke `python -m pytest` or bare `pytest` — `uv run` resolves the project environment correctly.
+- **Python projects without uv**: use the project's documented command (`pytest`, `python -m pytest`, `make test`). If unclear, ASK.
+- **Other languages**: use the project-appropriate command (`npm test`, `cargo test`, `go test ./...`, `make test`).
+
+If a test command fails for an environmental reason (missing dependency, venv not present, wrong interpreter), STOP and ask — do not paper over it by switching shells, backgrounding, or invoking interpreters directly.
+
 ## Self-Review Before Reporting Back
 
 Same checklist as the standard implementer prompt: Completeness / Quality / Discipline / Testing.

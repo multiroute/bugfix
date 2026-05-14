@@ -110,8 +110,7 @@ if [ -f package.json ]; then npm install; fi
 if [ -f Cargo.toml ]; then cargo build; fi
 
 # Python
-if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-if [ -f pyproject.toml ]; then poetry install; fi
+if [ -f pyproject.toml ] || [ -f uv.lock ]; then uv sync; fi
 
 # Go
 if [ -f go.mod ]; then go mod download; fi
@@ -125,7 +124,7 @@ Run tests to ensure worktree starts clean:
 # Examples - use project-appropriate command
 npm test
 cargo test
-pytest
+uv run pytest
 go test ./...
 ```
 
