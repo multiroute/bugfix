@@ -9,7 +9,7 @@ This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "plann
 
 1. Read `.bugfix/runs/<ticket-id>.json` and confirm `current_stage == "planning"`. If not, exit with an error (the driver should not have dispatched).
 2. Read the spec at `state.spec_path` — that's the input.
-3. **Detect whether cwd is already a pre-staged ticket workspace.** A workspace counts as pre-staged when *either* cwd is an isolated git worktree *or* cwd is a main checkout that has already been switched to a non-base feature branch. Both are operationally equivalent: the operator (or a parent harness) has isolated the work for this ticket and the loop must respect that — creating a sibling `.worktrees/<ticket-id>/` from `state.base_branch` would conflict on the branch name and force the planning stage into an improvised fallback.
+3. **Detect whether cwd is already a pre-staged ticket workspace.** A workspace counts as pre-staged when *either* cwd is an isolated git worktree *or* cwd is a main checkout that has already been switched to a non-base feature branch. Both signal that the operator (or a parent harness) has isolated the work for this ticket and the loop must respect that — creating a sibling `.worktrees/<ticket-id>/` from `state.base_branch` would conflict on the branch name and force the planning stage into an improvised fallback. The two cases are NOT equivalent in blast radius: with a true worktree the operator's main checkout is unaffected, but when a main checkout is reused as workspace, every commit, branch update, and push made by the loop lands directly in the operator's working repo. The `worktree_reused` event carries an `in_worktree` flag specifically so post-mortems can identify when the loop wrote into a non-isolated workspace.
 
    ```bash
    git_dir="$(git rev-parse --git-dir 2>/dev/null || echo "")"
@@ -22,7 +22,9 @@ This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "plann
    current_branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo "")"
    ```
 
-   Decision table:
+   **Detached HEAD guard.** If `current_branch` is empty (detached HEAD, or any state without a symbolic ref on HEAD), the decision table below cannot be evaluated — comparing `""` against `state.base_branch` would silently route into the "pre-staged on a feature branch" row and persist `state.branch = ""`, which downstream `autonomous-finishing` would then try to push via `git push -u origin ""`, failing far from the actual root cause. Refuse here: exit via `bugfix:block-and-comment(tech-failure, reason="cannot determine current branch (detached HEAD?) — check out a feature branch before re-running")`. Do NOT advance `state.current_stage`.
+
+   Decision table (assumes `current_branch` is non-empty per the guard above):
 
    - **`current_branch != state.base_branch` (pre-staged on a feature branch — worktree OR main checkout):** Treat cwd as the ticket's workspace. Do NOT invoke `bugfix:using-git-worktrees`. Record:
      - `state.worktree_path = "$(pwd)"` (absolute).
@@ -30,6 +32,7 @@ This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "plann
      - `state.base_sha = "$(git merge-base HEAD "origin/$state.base_branch" 2>/dev/null || git rev-parse HEAD)"` (commit we branched off; falls back to HEAD if no merge base exists, which would be unusual).
      - Verify the baseline is clean (`git status --porcelain` empty). If dirty, exit via `bugfix:block-and-comment(tech-failure, reason="ticket workspace is not clean — cannot start planning with uncommitted changes")`.
      - Emit `worktree_reused` event (detail: `{"path": "<state.worktree_path>", "branch": "<state.branch>", "in_worktree": <true|false>}`). The `in_worktree` flag distinguishes a true worktree from a main-checkout-on-feature-branch, for forensic visibility downstream.
+     - **Operator-ownership warning (applies when `in_worktree=false`).** From this point until the loop reaches a terminal state, the operator MUST NOT switch branches or make commits in this checkout. Subsequent stages (`bugfix:executing-plan`, `bugfix:pr-final-review`) `cd` into `state.worktree_path` and operate on whatever state they find there — concurrent operator changes will be silently picked up by rebases and pushes. A true worktree is isolated from this hazard; a reused main checkout is not.
 
    - **`current_branch == state.base_branch` AND `in_worktree=true` (worktree sitting on base branch — operator forgot to check out a feature branch):** Committing the regression test and fix into the base branch and then pushing would later cause `autonomous-finishing` to open a `main → main` PR, which `gh pr create` rejects only at the finishing stage — by which point planning and executing have already run. Refuse early: exit via `bugfix:block-and-comment(tech-failure, reason="pre-staged worktree is on base_branch (<base_branch>) — refusing to commit there. Check out a feature branch in the worktree before re-running.")`. Do NOT advance `state.current_stage`.
 
@@ -263,6 +266,9 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 | Condition | exit_kind |
 |---|---|
 | Spec at `state.spec_path` is missing / unreadable | `tech-failure` |
+| Workspace detection: `current_branch` is empty (detached HEAD) | `tech-failure` |
+| Workspace detection: cwd is a clean worktree on `state.base_branch` | `tech-failure` |
+| Workspace detection: pre-staged workspace has uncommitted changes | `tech-failure` |
 | `bugfix:using-git-worktrees` fails (dirty baseline, branch conflict, etc.) | `tech-failure` |
 | Spec is too ambiguous to produce a plan (mandatory reviewer flags it) | `needs-info` |
 | Plan reviewer rejects ≥ `config.retry_budgets.planning` times | `tech-failure` |
