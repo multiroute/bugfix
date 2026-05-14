@@ -59,10 +59,18 @@ If the file does NOT exist, create it **atomically** using `set -o noclobber`. T
 
 ```bash
 mkdir -p .bugfix/runs
+# Resolve the runs directory to an absolute path NOW (before any stage cds
+# into a worktree). state.artifacts.events_log_path is the canonical pointer
+# every emitter consumes — sub-agents that cd into a worktree look it up from
+# state and never construct a relative .bugfix/runs/... path themselves.
+RUNS_DIR="$(cd .bugfix/runs && pwd)"
+EVENTS_LOG="$RUNS_DIR/<ticket_id>.events.log"
+STATE_PATH="$RUNS_DIR/<ticket_id>.json"
+
 # Atomic create — fails (non-zero exit) if the file appeared between the
 # absent-check above and this write. On collision the OTHER invocation
 # initialized the state; we simply join the loop without overwriting.
-if ! ( set -o noclobber; cat > ".bugfix/runs/<ticket_id>.json" <<'JSON'
+if ! ( set -o noclobber; cat > ".bugfix/runs/<ticket_id>.json" <<JSON
 {
   "ticket_id": "<owner>-<repo>-<number>",
   "owner": "<owner>",
@@ -74,7 +82,10 @@ if ! ( set -o noclobber; cat > ".bugfix/runs/<ticket_id>.json" <<'JSON'
   "terminal": null,
   "base_branch": "<from config.base_branch, default 'main'>",
   "retries": {},
-  "artifacts": {}
+  "artifacts": {
+    "events_log_path": "$EVENTS_LOG",
+    "state_path": "$STATE_PATH"
+  }
 }
 JSON
 ) 2>/dev/null; then
@@ -85,12 +96,14 @@ JSON
   # the state file). Skip the initialization, proceed to the loop.
   :
 else
-  # We initialized. Emit the intake_started event.
-  bugfix/lib/events-append.sh ".bugfix/runs/<ticket_id>.events.log" intake_started intake '{}'
+  # We initialized. Emit the intake_started event using the absolute log path.
+  bugfix/lib/events-append.sh "$EVENTS_LOG" intake_started intake '{}'
 fi
 ```
 
 The `intake_started` event is emitted only by the invocation that won the noclobber race — never twice.
+
+`state.artifacts.events_log_path` and `state.artifacts.state_path` are absolute filesystem paths captured at the project root before any stage cds into a worktree. Every subsequent event emission across the loop reads `events_log_path` from state and passes it to `events-append.sh`; no stage skill constructs a relative `.bugfix/runs/...` path itself. This pins the audit log to one location regardless of the emitter's cwd — a sub-agent dispatched into `.worktrees/<ticket-id>/` still writes to the project-root events log, not to a phantom file inside the worktree.
 
 ## Driver loop
 

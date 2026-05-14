@@ -127,7 +127,7 @@ Apply all state changes as one read-modify-write of `.bugfix/runs/<ticket_id>.js
 
 ## Events
 
-Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket_id>.events.log" <event> intake '<detail-json>'`:
+Resolve `EVENTS_LOG="$(jq -r .artifacts.events_log_path .bugfix/runs/<ticket_id>.json)"` on entry. The path is absolute (written by `bugfix:run-ticket` at state init); pass it to `events-append.sh` rather than constructing a relative `.bugfix/runs/...` path. Emit via `bugfix/lib/events-append.sh "$EVENTS_LOG" <event> intake '<detail-json>'`:
 
 - `intake_started` (detail: `{}`) — at the very start, before reading the ticket.
 - `intake_passed` (detail: `{"classification": "bug"|"improvement"}`) — after writing the spec and setting status. For bugs and improvements.

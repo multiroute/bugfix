@@ -100,7 +100,7 @@ One read-modify-write at the end.
 
 ## Events
 
-Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <event> finishing '<detail-json>'`:
+Resolve `EVENTS_LOG="$(jq -r .artifacts.events_log_path .bugfix/runs/<ticket-id>.json)"` on entry, BEFORE the cd into `state.worktree_path`. The path is absolute (written by `bugfix:run-ticket` at state init); pass it to `events-append.sh` rather than constructing a relative `.bugfix/runs/...` path — once cwd is inside the worktree, relative paths resolve to phantom files that the driver and downstream stages never see. Emit via `bugfix/lib/events-append.sh "$EVENTS_LOG" <event> finishing '<detail-json>'`:
 
 - `pr_pushed` (detail: `{}`) — after a successful push, before open_pr.
 - `pr_opened` (detail: `{"pr_number": <int>}`) — after open_pr returns.

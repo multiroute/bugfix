@@ -364,7 +364,7 @@ Retry semantics are **same-mode-twice**, not any-mode-twice: a task with one spe
 
 ## Events
 
-Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <event> executing '<detail-json>'`:
+Resolve `EVENTS_LOG="$(jq -r .artifacts.events_log_path .bugfix/runs/<ticket-id>.json)"` on entry, BEFORE the cd into `state.worktree_path`. The path is absolute (written by `bugfix:run-ticket` at state init); pass it to `events-append.sh` rather than constructing a relative `.bugfix/runs/...` path — once cwd is inside the worktree, relative paths resolve to phantom files that the driver and downstream stages never see. Emitted via `bugfix/lib/events-append.sh "$EVENTS_LOG" <event> executing '<detail-json>'`:
 
 - `task_started` — detail: `{"task_number": <int>}`. Before dispatching the implementer for that task.
 - `task_spec_review_failed` — detail: `{"task_number": <int>, "attempt": <int>}`. After a spec-reviewer subagent reports issues.
