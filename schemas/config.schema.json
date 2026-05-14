@@ -14,8 +14,7 @@
       "properties": {
         "planner":     { "type": "string" },
         "implementer": { "type": "string" },
-        "reviewer":    { "type": "string" },
-        "adversary":   { "type": "string" }
+        "reviewer":    { "type": "string" }
       }
     },
     "retry_budgets": {
@@ -32,9 +31,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "adversary_enabled":               { "type": "boolean" },
-        "important_findings_block":        { "type": "boolean" },
-        "advocate_must_run_regression_test": { "type": "boolean" }
+        "important_findings_block":          { "type": "boolean" },
+        "reviewer_must_run_regression_test": { "type": "boolean" }
       }
     },
     "bot_author_allowlist": {
