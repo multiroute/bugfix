@@ -48,4 +48,8 @@ grep -qF "Per-stage model hints" "$SKILL" || { echo "FAIL must document per-stag
 grep -qF "config.model_hints.stages" "$SKILL" || { echo "FAIL must reference config.model_hints.stages"; exit 1; }
 echo "OK  per-stage model-hint contract documented"
 
+grep -qF "dispatches exactly one stage skill" "$SKILL" \
+  || { echo "FAIL resume-run missing single-dispatcher framing"; exit 1; }
+echo "OK  single-dispatcher framing present"
+
 echo "PASS"

@@ -105,6 +105,19 @@ loop:
 
 Each loop iteration dispatches exactly one stage via `resume-run`. The loop exits when state reaches a terminal value OR a blocked state OR (in pathological cases) an iteration count cap.
 
+### Red flags during the driver loop
+
+If you catch yourself thinking any of these, STOP and re-invoke `bugfix:resume-run`:
+
+| Thought | Reality |
+|---|---|
+| "I already have the data, I can do this inline" | The whole point of resume-run is fresh-context isolation. Invoke it. |
+| "User said fix it, I should just deliver" | Delivery comes from finishing the loop, not from skipping it. |
+| "Stage X is simple, I can collapse it with Y" | Stages are independent for a reason — review checkpoints, retry budgets, terminal-state tracking. Don't collapse. |
+| "The adapter failed, I'll work around it" | Adapter failures must escalate via `block-and-comment(tech-failure)`. Don't improvise. |
+
+Every iteration MUST be one `Skill: bugfix:resume-run` call. If your next tool call after this section is anything other than `Skill: bugfix:resume-run`, you are violating the contract.
+
 **Iteration cap:** maximum 100 iterations per invocation. The bugfix loop should never need more than ~10 stage transitions (intake → planning → executing → finishing → ci-watching → pr-reviewing → terminal), so a cap of 100 is generous and protects against pathological infinite loops. If the cap is hit, set `state.terminal = "failed"` (record the cause via `state.artifacts.failure_reason = "iteration cap reached"`) and exit. Do NOT also set `blocked_reason` — `terminal` and `blocked_reason` are mutually exclusive per the run-state schema.
 
 **Progress guard:** in addition to the cap, if `state.current_stage` is unchanged AND no state mutation occurred across two consecutive iterations, declare progress lost and set `state.terminal = "failed"` (artifacts.failure_reason = "stalled — no progress across two consecutive iterations") immediately. Prevents the cap from being a slow timeout when a stage silently no-ops.

@@ -7,6 +7,8 @@ description: Use to advance an in-flight bugfix ticket by one stage. Reads `.bug
 
 Single-stage dispatcher. The contract is small, the failure modes are explicit, and the skill MUST exit cleanly after exactly one stage dispatch (or one terminal-state observation).
 
+**Single-dispatcher rule:** resume-run dispatches exactly one stage skill via the `Skill` tool, then exits. If you find yourself wanting to inline the stage's work instead of invoking it as a skill, STOP — the dispatch must happen via the `Skill` tool so the next agent context can pick up cleanly if the run is split across sessions, and so the PostToolUse hook can fire on the stage invocation.
+
 ## Contract
 
 **Input:** `ticket_id` (string, of the form `<owner>-<repo>-<number>`).

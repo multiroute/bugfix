@@ -15,6 +15,12 @@ The bugfix plugin runs an autonomous bug-fix loop: ticket -> spec -> plan -> imp
 
 **Routing rule:** when the user's message matches `bugfix:run-ticket`'s description, invoke `bugfix:run-ticket` via the `Skill` tool. Do NOT pre-empt it by reporting "not yet implemented" yourself — `run-ticket` owns that disclosure and handles URL parsing, ticket-id derivation, and the structured status response. Pre-empting it bypasses the trigger contract and confuses operators.
 
+## Loop discipline
+
+The loop has exactly one dispatcher: `bugfix:resume-run`. Stage skills (ticket-intake, writing-plans, executing-plan, autonomous-finishing, ci-watchdog, pr-final-review) are invoked BY resume-run, never by the agent directly. If you have data in context and feel the urge to skip the dispatcher and "just finish the work," STOP. That instinct is the failure mode the loop is designed to prevent.
+
+The PostToolUse hook will emit a reminder after each orchestration-skill invocation, pointing you back at resume-run. Honor it.
+
 ## Instruction priority
 
 User instructions always take precedence over skills. If CLAUDE.md / AGENTS.md says "don't use X" and a bugfix skill says "always use X," follow the user.

@@ -77,4 +77,12 @@ if [[ "$actual_description" != "$expected_description" ]]; then
 fi
 echo "OK  description string pinned exactly"
 
+grep -qiF "red flags during the driver loop" "$SKILL" \
+  || { echo "FAIL run-ticket missing 'Red flags during the driver loop' subsection"; exit 1; }
+echo "OK  Red flags subsection present"
+
+grep -qF "I already have the data" "$SKILL" \
+  || { echo "FAIL run-ticket Red flags table missing 'I already have the data' entry"; exit 1; }
+echo "OK  Red flags table references rationalization patterns"
+
 echo "PASS"

@@ -54,4 +54,12 @@ echo "OK  run-ticket no longer marked as Increment 1 stub"
 
 echo "OK  run-ticket is not falsely marked unimplemented"
 
+grep -qF "## Loop discipline" "$SKILL" \
+  || { echo "FAIL using-bugfix missing 'Loop discipline' section"; exit 1; }
+echo "OK  Loop discipline section present"
+
+grep -qF "bugfix:resume-run" "$SKILL" \
+  || { echo "FAIL using-bugfix Loop discipline section must reference resume-run"; exit 1; }
+echo "OK  Loop discipline references resume-run"
+
 echo "PASS"
