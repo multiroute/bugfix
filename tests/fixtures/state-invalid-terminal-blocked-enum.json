@@ -1,0 +1,9 @@
+{
+  "ticket_id": "BUG-4444",
+  "started_at": "2026-05-13T14:00:00Z",
+  "updated_at": "2026-05-13T14:05:00Z",
+  "current_stage": "intake",
+  "terminal": "blocked",
+  "retries": {},
+  "artifacts": {}
+}

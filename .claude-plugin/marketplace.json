@@ -1,0 +1,22 @@
+{
+  "name": "multiroute",
+  "owner": {
+    "name": "Artur",
+    "email": "artur@kodif.io"
+  },
+  "metadata": {
+    "description": "multiroute's marketplace for the bugfix autonomous bug-fix loop plugin"
+  },
+  "plugins": [
+    {
+      "name": "bugfix",
+      "description": "Autonomous bug-fix loop as a Claude skills plugin",
+      "version": "0.7.0",
+      "source": "./",
+      "author": {
+        "name": "Artur",
+        "email": "artur@kodif.io"
+      }
+    }
+  ]
+}

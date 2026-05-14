@@ -1,0 +1,18 @@
+{
+  "ticket_id": "multiroute-platform-118",
+  "owner": "multiroute",
+  "repo": "platform",
+  "issue_number": 118,
+  "started_at": "2026-05-13T14:00:00Z",
+  "updated_at": "2026-05-13T14:05:00Z",
+  "current_stage": "planning",
+  "terminal": null,
+  "base_branch": "main",
+  "spec_path": ".bugfix/specs/multiroute-platform-118.md",
+  "retries": {
+    "intake": 0
+  },
+  "artifacts": {
+    "intake_classification": "bug"
+  }
+}

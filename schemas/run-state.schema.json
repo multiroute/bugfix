@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bugfix.local/schemas/run-state.json",
+  "title": "bugfix run state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ticket_id",
+    "started_at",
+    "updated_at",
+    "current_stage",
+    "terminal",
+    "retries",
+    "artifacts"
+  ],
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "current_stage": {
+      "type": "string",
+      "enum": [
+        "intake",
+        "planning",
+        "executing",
+        "finishing",
+        "ci-watching",
+        "pr-reviewing"
+      ]
+    },
+    "terminal": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "merge-ready",
+        "pr-closed",
+        "failed",
+        "stage-not-implemented"
+      ]
+    },
+    "worktree_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "branch": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "base_branch": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "base_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "spec_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "plan_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pr_number": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "blocked_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "blocked_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "retries": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ]
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repo": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "issue_number": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "pr_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "description": "terminal and blocked_reason are mutually exclusive — a ticket is either terminated or paused-for-human, never both",
+      "not": {
+        "type": "object",
+        "properties": {
+          "terminal": {
+            "type": "string"
+          },
+          "blocked_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "terminal",
+          "blocked_reason"
+        ]
+      }
+    }
+  ]
+}

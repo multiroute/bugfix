@@ -1,0 +1,25 @@
+{
+  "base_branch": "main",
+  "ticket_adapter": "github",
+  "model_hints": {
+    "planner": "opus",
+    "implementer": "sonnet",
+    "reviewer": "opus",
+    "adversary": "opus",
+    "stages": {
+      "intake": "haiku",
+      "ci-watching": "haiku"
+    }
+  },
+  "retry_budgets": {
+    "spec_review": 2,
+    "code_quality_review": 2,
+    "ci": 2,
+    "planning": 2
+  },
+  "pr_review": {
+    "adversary_enabled": true,
+    "important_findings_block": false,
+    "advocate_must_run_regression_test": true
+  }
+}

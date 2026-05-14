@@ -1,0 +1,22 @@
+{
+  "ticket_id": "BUG-9999",
+  "started_at": "2026-05-13T10:00:00Z",
+  "updated_at": "2026-05-13T16:30:00Z",
+  "current_stage": "pr-reviewing",
+  "terminal": "merge-ready",
+  "worktree_path": ".worktrees/BUG-9999",
+  "branch": "fix/BUG-9999",
+  "base_branch": "main",
+  "base_sha": "def456",
+  "spec_path": ".bugfix/specs/BUG-9999.md",
+  "plan_path": ".bugfix/plans/BUG-9999.md",
+  "pr_number": 42,
+  "blocked_reason": null,
+  "blocked_questions": [],
+  "retries": {},
+  "artifacts": {
+    "intake_classification": "bug",
+    "advocate_verdict": "Ready: yes",
+    "adversary_verdict": "clean"
+  }
+}

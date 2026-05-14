@@ -1,0 +1,10 @@
+{"t":"2026-05-13T14:00:00Z","event":"intake_started","stage":"intake","detail":{}}
+{"t":"2026-05-13T14:00:05Z","event":"intake_passed","stage":"intake","detail":{"classification":"bug"}}
+{"t":"2026-05-13T14:00:10Z","event":"lock_acquired","stage":"planning","detail":{"pid":12345}}
+{"t":"2026-05-13T14:02:00Z","event":"worktree_created","stage":"planning","detail":{"path":".worktrees/BUG-1234"}}
+{"t":"2026-05-13T14:10:00Z","event":"plan_reviewed","stage":"planning","detail":{"plan_path":".bugfix/plans/BUG-1234.md"}}
+{"t":"2026-05-13T14:15:00Z","event":"task_started","stage":"executing","detail":{"task_number":1}}
+{"t":"2026-05-13T14:25:00Z","event":"task_done","stage":"executing","detail":{"task_number":1}}
+{"t":"2026-05-13T14:30:00Z","event":"pr_opened","stage":"finishing","detail":{"pr_number":42}}
+{"t":"2026-05-13T14:45:00Z","event":"ci_green","stage":"ci-watching","detail":{}}
+{"t":"2026-05-13T14:50:00Z","event":"pr_merge_ready","stage":"pr-reviewing","detail":{}}

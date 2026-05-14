@@ -1,0 +1,14 @@
+{
+  "ticket_id": "BUG-2222",
+  "started_at": "2026-05-13T14:00:00Z",
+  "updated_at": "2026-05-13T14:05:00Z",
+  "current_stage": "intake",
+  "terminal": null,
+  "blocked_reason": "ambiguous repro steps",
+  "blocked_questions": [
+    "Which browser/version is affected?",
+    "Does the bug reproduce in incognito mode?"
+  ],
+  "retries": { "intake": 0 },
+  "artifacts": {}
+}

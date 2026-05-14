@@ -1,0 +1,8 @@
+{
+  "model_hints": {
+    "stages": {
+      "intake": "haiku",
+      "not-a-real-stage": "haiku"
+    }
+  }
+}

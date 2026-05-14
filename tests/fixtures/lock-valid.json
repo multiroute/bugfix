@@ -1,0 +1,6 @@
+{
+  "pid": 12345,
+  "session_id": "sess_abc",
+  "stage": "executing",
+  "acquired_at": "2026-05-13T14:00:00Z"
+}

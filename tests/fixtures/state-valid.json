@@ -1,0 +1,34 @@
+{
+  "ticket_id": "BUG-1234",
+  "owner": "multiroute",
+  "repo": "platform",
+  "issue_number": 1234,
+  "started_at": "2026-05-13T14:00:00Z",
+  "updated_at": "2026-05-13T15:42:00Z",
+  "current_stage": "executing",
+  "terminal": null,
+  "worktree_path": ".worktrees/BUG-1234",
+  "branch": "fix/BUG-1234",
+  "base_branch": "main",
+  "base_sha": "abc123",
+  "spec_path": ".bugfix/specs/BUG-1234.md",
+  "plan_path": ".bugfix/plans/BUG-1234.md",
+  "pr_number": null,
+  "blocked_reason": null,
+  "blocked_questions": [],
+  "retries": {
+    "intake": 0,
+    "planning": 0,
+    "executing": {
+      "task_3_spec_review": 1
+    },
+    "ci-watching": 0,
+    "pr-reviewing": 0
+  },
+  "artifacts": {
+    "intake_classification": "bug",
+    "regression_test_path": "tests/test_bug_1234.py",
+    "advocate_verdict": null,
+    "adversary_verdict": null
+  }
+}
