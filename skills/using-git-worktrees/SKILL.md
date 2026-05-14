@@ -98,6 +98,14 @@ git worktree add "$path" -b "$BRANCH_NAME"
 cd "$path"
 ```
 
+**This skill creates a NEW branch from current HEAD; it does not reuse existing branches.** If `git worktree add` fails — branch name already exists locally, already checked out in another worktree, target path conflicts, dirty index — surface that error to the caller. Do NOT improvise around it by:
+
+- Dropping the `-b` flag to reuse the existing branch
+- Switching to a different branch name
+- Falling back to "just use the current checkout as the workspace"
+
+A worktree-add failure means the caller's assumptions were wrong (or this skill was invoked from the wrong place). The caller is responsible for resolving the precondition violation; this skill only reports it.
+
 ### 3. Run Project Setup
 
 Auto-detect and run appropriate setup:
@@ -198,6 +206,7 @@ Ready to implement auth feature
 - Proceed with failing tests without asking
 - Assume directory location when ambiguous
 - Skip CLAUDE.md check
+- Improvise around a `git worktree add` failure (branch conflict, path conflict, etc.) — surface it to the caller
 
 **Always:**
 - Follow directory priority: existing > CLAUDE.md > ask

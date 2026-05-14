@@ -118,4 +118,43 @@ grep -qiF "branch == state.base_branch" "$SKILL" \
   || { echo "FAIL writing-plans must guard against pre-staged worktree on base_branch"; exit 1; }
 echo "OK  writing-plans guards against base_branch as working branch"
 
+# Detached-HEAD guard: workspace detection must refuse when current_branch is
+# empty rather than silently routing into the feature-branch reuse path with
+# state.branch == "" (which downstream `git push -u origin ""` would fail on).
+grep -qiF "Detached HEAD guard" "$SKILL" \
+  || { echo "FAIL writing-plans missing detached-HEAD guard heading"; exit 1; }
+grep -qiF "current_branch\` is empty" "$SKILL" \
+  || { echo "FAIL writing-plans missing detached-HEAD empty-branch check"; exit 1; }
+echo "OK  detached-HEAD guard documented"
+
+# Pre-staged workspace acceptance must NOT silently fall back to the main
+# checkout when worktree creation fails — that was the bug that motivated the
+# unified detection. Pin the load-bearing prose so future edits can't quietly
+# weaken it.
+grep -qiF "improvised fallback" "$SKILL" \
+  || { echo "FAIL writing-plans missing improvised-fallback rationale"; exit 1; }
+echo "OK  workspace-detection rationale references the improvised-fallback hazard"
+
+# Blast-radius asymmetry must be acknowledged so operators understand what
+# `in_worktree: false` implies (commits land in their working repo, not an
+# isolated workspace).
+grep -qiF "blast radius" "$SKILL" \
+  || { echo "FAIL writing-plans must acknowledge blast-radius asymmetry between worktree and reused main checkout"; exit 1; }
+grep -qiF "operator's working repo" "$SKILL" \
+  || grep -qiF "operator's main checkout" "$SKILL" \
+  || { echo "FAIL writing-plans must reference operator's working repo / main checkout in blast-radius warning"; exit 1; }
+echo "OK  blast-radius asymmetry documented"
+
+# Operator-ownership warning: a reused main checkout is owned by the loop
+# until terminal — operator must not touch it. Without this rule the operator
+# may unknowingly cause silent state divergence between stages.
+grep -qiF "MUST NOT switch branches or make commits" "$SKILL" \
+  || { echo "FAIL writing-plans missing operator-ownership warning for reused main checkout"; exit 1; }
+echo "OK  operator-ownership warning present"
+
+# In-worktree event must carry the in_worktree flag for forensic visibility.
+grep -qF '"in_worktree":' "$SKILL" \
+  || { echo "FAIL worktree_reused event must include in_worktree flag in detail"; exit 1; }
+echo "OK  worktree_reused detail carries in_worktree flag"
+
 echo "PASS"
