@@ -7,11 +7,16 @@ HOOKS="$PLUGIN_ROOT/hooks/hooks.json"
 python3 -c "import json; json.load(open('$HOOKS'))" || { echo "FAIL hooks.json not valid JSON"; exit 1; }
 
 # Must declare SessionStart with the right matcher and command.
+# R4-N4: hooks.json must declare ONLY the SessionStart and PostToolUse
+# hooks — any other hook key (PreToolUse, UserPromptSubmit, etc.) would
+# expand the plugin's permission surface unexpectedly. The plugin's
+# hook-permission surface is a tracked, audited list; adding any other
+# hook key is forbidden without an explicit design change.
 python3 -c "
 import json
 h = json.load(open('$HOOKS'))
 hooks_obj = h['hooks']
-assert 'SessionStart' in hooks_obj, f'hooks.json must declare SessionStart, got {set(hooks_obj.keys())}'
+assert set(hooks_obj.keys()) == {'SessionStart', 'PostToolUse'}, f'hooks.json must declare ONLY SessionStart and PostToolUse, got {set(hooks_obj.keys())}'
 ss = hooks_obj['SessionStart']
 assert isinstance(ss, list) and len(ss) >= 1, ss
 entry = ss[0]
