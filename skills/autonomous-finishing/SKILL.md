@@ -64,7 +64,16 @@ The failing-test-first task from the plan (Task 1) added a regression test at: `
 🤖 Opened by bugfix autonomous loop. CI watching and parallel advocate + adversary final review run next; this comment will be supplemented with their verdicts before merge-ready.
 ```
 
-PR title: `Fix #<issue_number>: <ticket title>` where `<ticket title>` is the ticket title sanitized for human display: strip the `<untrusted-input>` wrapper tags (the title is human-visible in the GitHub UI, not LLM-consumed at this point), strip any control characters, replace newlines with spaces, and truncate to 70 chars including an ellipsis. The wrapper-stripping is unusual for adapter-returned text — explicitly: the title is the one place we render ticket text for human reading, so the LLM-safety wrapper would just appear as literal `<untrusted-input>` characters in the PR header.
+### PR title prefix
+
+The PR title prefix is derived from `state.artifacts.intake_classification`:
+
+- `bug` → `Fix: <issue title>`
+- `improvement` → `Improve: <issue title>`
+
+`<issue title>` is the original GitHub issue title (already wrapped in `<untrusted-input>` by `ticket-adapter:read`). Strip the wrapper tags ONLY for the title field (titles must be plain text in `gh pr create` / `mcp__github__create_pull_request`); keep all body fields wrapped per the Untrusted-input rule.
+
+PR title (full form): `<prefix> #<issue_number>: <ticket title>` where `<prefix>` is `Fix` or `Improve` per the rule above and `<ticket title>` is the ticket title sanitized for human display: strip the `<untrusted-input>` wrapper tags (the title is human-visible in the GitHub UI, not LLM-consumed at this point), strip any control characters, replace newlines with spaces, and truncate to 70 chars including an ellipsis. The wrapper-stripping is unusual for adapter-returned text — explicitly: the title is the one place we render ticket text for human reading, so the LLM-safety wrapper would just appear as literal `<untrusted-input>` characters in the PR header.
 
 The ticket comment uses a shorter template (substitute `<pr_url>` with the constructed `state.pr_url` value):
 

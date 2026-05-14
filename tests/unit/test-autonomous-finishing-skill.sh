@@ -51,4 +51,17 @@ grep -qF "you violate the loop contract" "$SKILL" \
   || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
 echo "OK  STAGE COMPLETE footer contains loop-contract directive"
 
+# PR title prefix branches on classification.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must reference intake_classification for PR title"; exit 1; }
+echo "OK  PR title branches on classification"
+
+grep -qF "Fix:" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must document 'Fix:' prefix"; exit 1; }
+echo "OK  'Fix:' prefix documented"
+
+grep -qF "Improve:" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must document 'Improve:' prefix"; exit 1; }
+echo "OK  'Improve:' prefix documented"
+
 echo "PASS"
