@@ -52,6 +52,33 @@ grep -qiF "Recommended model: Haiku" "$SKILL" || { echo "FAIL ticket-intake must
 grep -qF "config.model_hints.stages.intake" "$SKILL" || { echo "FAIL ticket-intake must reference the stage model-hint config key"; exit 1; }
 echo "OK  Haiku recommendation + model-hint config key documented"
 
+# Improvement classification must route to spec writing, not block-and-comment.
+grep -qF "classification == \"improvement\"" "$SKILL" \
+  || { echo "FAIL intake must reference improvement classification"; exit 1; }
+echo "OK  intake handles improvement classification"
+
+# Improvement spec template must be documented.
+grep -qF "## Desired outcome" "$SKILL" \
+  || { echo "FAIL intake missing improvement-spec template '## Desired outcome' section"; exit 1; }
+echo "OK  improvement spec template documented"
+
+grep -qF "## Rationale" "$SKILL" \
+  || { echo "FAIL intake missing improvement-spec template '## Rationale' section"; exit 1; }
+echo "OK  improvement Rationale section documented"
+
+# Classification line must appear in both templates.
+grep -qF "**Classification:**" "$SKILL" \
+  || { echo "FAIL intake spec templates must include Classification frontmatter line"; exit 1; }
+echo "OK  Classification line documented"
+
+# Block-and-comment table must no longer say improvement -> rejected.
+block_table_section="$(awk '/^## Block-and-comment exits$/,/^## /' "$SKILL")"
+if echo "$block_table_section" | grep -iF "classification = \`improvement\`" >/dev/null; then
+  echo "FAIL block-and-comment table still mentions improvement classification"
+  exit 1
+fi
+echo "OK  block-and-comment table no longer routes improvements"
+
 # STAGE COMPLETE footer must be present and contain the STOP HERE directive.
 grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
   || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
