@@ -10,7 +10,9 @@ Autonomous bug-fix loop as a Claude skills plugin. From ticket to merge-ready PR
 
 ### Host requirements
 
-The plugin runs entirely on Bash + `gh` + Claude Code's standard built-in tools (Read, Edit, Write, Bash, Skill, Task, TodoWrite). The CI watchdog stage uses Bash with `run_in_background: true` to long-poll `gh pr checks --watch --fail-fast` and is notified by the host runtime on completion — **no dependency on the deferred `Monitor` tool, no in-session sleep, no permission prompt beyond Bash itself**.
+The plugin runs on Bash + Claude Code's standard built-in tools (Read, Edit, Write, Bash, Skill, Task, TodoWrite) plus **either** the GitHub MCP server **or** the `gh` CLI for GitHub access. The adapter prefers GitHub MCP when present and falls back to `gh` (≥ 2.40) otherwise. The choice is cached per-run in `state.artifacts.adapter_backend` so a single run never mixes backends.
+
+The CI watchdog stage long-polls CI. With `gh`, it uses `gh pr checks --watch --fail-fast` (blocking, backgrounded) — efficient and notified by the host runtime on completion. With MCP, it falls back to in-skill polling (30 s interval). For MCP-only environments with long CI runs (~30 min+), this consumes meaningfully more session time than the `gh` path.
 
 ## Install
 
@@ -68,6 +70,8 @@ fix bug https://github.com/<owner>/<repo>/issues/<number>
 ```
 
 The agent invokes `bugfix:run-ticket`, parses the URL, initializes `.bugfix/runs/<ticket-id>.json`, acquires the per-ticket lock, and loops the stage skills to a terminal verdict on the PR. Identical behavior with `fix issue <url>` and `resolve issue <url>`.
+
+The loop also handles improvement tickets (refactors, cleanups, new behavior requests) — not just defects. The ticket-intake stage classifies the ticket; bugs and improvements both run through planning → executing → finishing → CI → review, with the only difference being that improvements relax the failing-test-first rule (since there's no defect to reproduce). Tickets that are too vague to act on still reject at intake with a `bugfix-status:rejected` comment.
 
 The URL must be a GitHub **issue** URL (not a PR URL). Owner and repo names must contain only `A-Za-z0-9._-` characters.
 
