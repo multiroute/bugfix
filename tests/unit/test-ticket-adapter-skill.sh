@@ -12,8 +12,9 @@ echo "OK  frontmatter name correct"
 
 # Description must mention gh and GitHub (to make the trigger discoverable).
 desc_line="$(grep -m1 "^description:" "$SKILL")"
-echo "$desc_line" | grep -qE '`gh`|MCP' || { echo "FAIL description must mention gh or MCP"; exit 1; }
-echo "OK  description mentions gh or MCP"
+echo "$desc_line" | grep -qF "MCP" || { echo "FAIL description must mention MCP"; exit 1; }
+echo "$desc_line" | grep -qF "gh" || { echo "FAIL description must mention gh"; exit 1; }
+echo "OK  description mentions both backends"
 echo "$desc_line" | grep -qi "github" || { echo "FAIL description must mention GitHub"; exit 1; }
 echo "OK  description names GitHub"
 
@@ -166,5 +167,10 @@ echo "OK  MCP ci_watch polling loop documented"
 grep -qF "30" "$SKILL" \
   || { echo "FAIL adapter ci_watch must document poll interval"; exit 1; }
 echo "OK  MCP ci_watch poll interval documented"
+
+# rebase_pr MCP path documents git-fetch fallback for the checkout step.
+grep -qF "git fetch origin pull/" "$SKILL" \
+  || { echo "FAIL adapter rebase_pr MCP path must document git fetch origin pull/<N>/head"; exit 1; }
+echo "OK  rebase_pr MCP path documented (git fetch checkout)"
 
 echo "PASS"

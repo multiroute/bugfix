@@ -1,6 +1,6 @@
 ---
 name: ticket-adapter
-description: Use when a bugfix stage skill needs to read a ticket, post a comment, set a ticket or PR status, push a branch, open or close a PR, poll CI, or rebase. The single place in the plugin that runs `gh` commands or hits GitHub's API.
+description: Use when a bugfix stage skill needs to read a ticket, post a comment, set a ticket or PR status, push a branch, open or close a PR, poll CI, or rebase. The single place in the plugin that hits GitHub. Prefers the GitHub MCP server when available, falls back to `gh` CLI otherwise.
 ---
 
 # bugfix:ticket-adapter
@@ -590,6 +590,23 @@ git push --force-with-lease
 **Critical:** on conflict, do NOT attempt auto-resolution. The bugfix plugin's policy (parent spec §9.5) is that cross-ticket conflicts on a public PR must be human-resolved.
 
 **Side-effect warning:** `gh pr checkout` switches branches in the current working tree. The plugin's design assumes this op runs inside a per-ticket worktree (set up by `bugfix:using-git-worktrees`), so the branch switch is isolated. Callers must not invoke this op with uncommitted changes in the worktree.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+`gh pr checkout` has no MCP equivalent; the MCP path uses plain git to fetch the PR branch:
+
+```bash
+git fetch origin pull/<pr_number>/head:<branch>
+git checkout <branch>
+git rebase <base>
+git push --force-with-lease origin <branch>
+```
+
+Same conflict detection as the gh path — if `git rebase` exits non-zero with conflict markers, return `{"success": false, "conflicts": [...]}` (list extracted from `git status --porcelain` output, filtered to `UU`-marked files). Return `{"success": true}` on clean rebase + push.
+
+The `<branch>` placeholder MUST match the same regex as the gh path (`^[A-Za-z0-9._/+-]+$` and no leading `-`) — Argument validation rules apply unchanged.
 
 ## Errors
 
