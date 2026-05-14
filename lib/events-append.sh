@@ -18,12 +18,14 @@ detail="$4"
 
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCHEMA="$PLUGIN_ROOT/schemas/events.schema.json"
+LIB_DIR="$PLUGIN_ROOT/lib"
 
 # Build the record in Python, validate against schema, emit JSONL line.
 # All inputs passed via env vars to avoid shell-interpolation injection.
-line="$(EVENT="$event" STAGE="$stage" DETAIL="$detail" SCHEMA="$SCHEMA" python3 -c '
+line="$(EVENT="$event" STAGE="$stage" DETAIL="$detail" SCHEMA="$SCHEMA" LIB_DIR="$LIB_DIR" python3 -c '
 import json, os, sys, datetime
-from jsonschema import validate, ValidationError
+sys.path.insert(0, os.environ["LIB_DIR"])
+from jsonschema_mini import validate, ValidationError
 try:
     detail = json.loads(os.environ["DETAIL"])
 except (json.JSONDecodeError, ValueError) as e:
