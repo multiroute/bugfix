@@ -4,8 +4,7 @@
   "model_hints": {
     "planner": "opus",
     "implementer": "sonnet",
-    "reviewer": "opus",
-    "adversary": "opus"
+    "reviewer": "opus"
   },
   "retry_budgets": {
     "spec_review": 2,
@@ -14,8 +13,7 @@
     "planning": 2
   },
   "pr_review": {
-    "adversary_enabled": true,
     "important_findings_block": false,
-    "advocate_must_run_regression_test": true
+    "reviewer_must_run_regression_test": true
   }
 }
