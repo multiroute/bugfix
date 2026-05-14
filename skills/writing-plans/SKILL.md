@@ -139,7 +139,7 @@ Improvement plans do NOT have a defect to reproduce, so the mandatory failing-te
 - If the improvement is a refactor or cleanup with no behavior change, Task 1 MAY be the refactoring step itself, with existing tests proving non-regression.
 - If the improvement is documentation or comment cleanup, Task 1 MAY be the change itself.
 
-In all cases, the improvement plan SHOULD produce test coverage for any new behavior added. Coverage adequacy is judged by the plan reviewer (second-stage review below) and the PR-final-review adversary, not by a fixed rule.
+In all cases, the improvement plan SHOULD produce test coverage for any new behavior added. Coverage adequacy is judged by the plan reviewer (second-stage review below) and the PR-final-review calibrated reviewer, not by a fixed rule.
 
 
 ## Plan Document Header

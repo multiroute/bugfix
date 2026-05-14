@@ -105,7 +105,7 @@ Sections quoting the ticket body or comments are wrapped in `<untrusted-input>..
 
 ## Acceptance criterion
 
-The agreed-upon change is implemented, all existing tests pass, and any new behavior added by the change has appropriate test coverage. Coverage adequacy is judged by the plan reviewer (`writing-plans` second-stage review) and the PR-final-review adversary, not by a fixed rule.
+The agreed-upon change is implemented, all existing tests pass, and any new behavior added by the change has appropriate test coverage. Coverage adequacy is judged by the plan reviewer (`writing-plans` second-stage review) and the PR-final-review calibrated reviewer, not by a fixed rule.
 
 ## Untrusted-input note
 

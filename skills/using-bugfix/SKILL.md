@@ -11,7 +11,7 @@ If you were dispatched as a subagent to execute a specific task, skip this skill
 
 The bugfix plugin runs an autonomous bug-fix loop: ticket -> spec -> plan -> implementation -> PR -> CI -> final review -> merge-ready. Every stage is a skill you invoke via the `Skill` tool.
 
-**Status: Production (Increments 1-7).** The full autonomous loop runs end-to-end: `fix bug <github-url>` -> ticket-intake -> planning -> executing -> autonomous-finishing -> CI watching (with auto-fix on failure) -> final review (advocate + adversary in parallel) -> terminal `merge-ready` (human merges manually) or `pr-closed` or human-resolves-block. Production-ready in design; real-world tuning of adversary calibration comes after observing actual runs.
+**Status: Production (Increments 1-7).** The full autonomous loop runs end-to-end: `fix bug <github-url>` -> ticket-intake -> planning -> executing -> autonomous-finishing -> CI watching (with auto-fix on failure) -> calibrated final review -> terminal `merge-ready` (human merges manually) or `pr-closed`. Production-ready in design; real-world tuning of reviewer calibration comes after observing actual runs.
 
 **Routing rule:** when the user's message matches `bugfix:run-ticket`'s description, invoke `bugfix:run-ticket` via the `Skill` tool. Do NOT pre-empt it by reporting "not yet implemented" yourself — `run-ticket` owns that disclosure and handles URL parsing, ticket-id derivation, and the structured status response. Pre-empting it bypasses the trigger contract and confuses operators.
 
@@ -44,7 +44,7 @@ The autonomous loop progresses through these stage skills in order. You generall
 - `bugfix:executing-plan` - Executes the plan task-by-task with two-stage review (spec compliance, then code quality). Fresh implementer on retry.
 - `bugfix:autonomous-finishing` - Verifies tests pass, pushes the branch, opens a PR, comments the ticket.
 - `bugfix:ci-watchdog` - Polls CI on the opened PR. On failure: dispatches a fix sub-agent (bounded retries). On success: advances to PR-level final review.
-- `bugfix:pr-final-review` - Terminal stage. Rebases the PR, dispatches advocate + adversary reviewers in parallel, applies decision rule. Outcomes: `merge-ready` (human merges manually), `pr-closed`, or block-for-human-resolution.
+- `bugfix:pr-final-review` - Terminal stage. Rebases the PR, dispatches a single calibrated reviewer, applies a 3-row decision rule. Outcomes: `merge-ready` (human merges manually) or `pr-closed`.
 ## Quality discipline + primitives
 
 Use these any time the situation matches their description (the quality skills are vendored from `obra/superpowers` and apply to manual work just as much as autonomous loop runs):
