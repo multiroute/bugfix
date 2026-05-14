@@ -135,7 +135,7 @@ echo ".bugfix/" >> .gitignore
 
 (Feature specs and plans — written outside the bug-fix loop — still go to `docs/superpowers/{specs,plans}/` and are committed normally. The split is intentional: bug-fix runs are operational, ephemeral, per-ticket; feature work is design artifacts kept in the source tree.)
 
-State and events files are schema-validated by `bugfix/schemas/{run-state,events,config,lock}.schema.json`.
+State and events files are schema-validated by `bugfix/schemas/{run-state,events,config}.schema.json`.
 
 ## Troubleshooting
 
