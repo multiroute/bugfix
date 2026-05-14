@@ -475,7 +475,7 @@ status = mcp__github__get_pull_request_status(owner=<state.owner>, repo=<state.r
 
 Return the same `{status, runs[]}` shape as the gh path:
 - `status` is `"success"` | `"failure"` | `"pending"`.
-- `runs[]` is `[{name, conclusion, detailsUrl}, ...]` derived from the MCP response.
+- `runs[]` is `[{name, conclusion, details_url}, ...]` derived from the MCP response (remapped from the canonical server's `detailsUrl` to snake_case to match the gh path's return shape).
 
 `<run_id>` extraction (from `detailsUrl`) follows the same regex validation as the gh path. The `run_id` is the highest-risk placeholder — see Argument validation.
 
@@ -544,12 +544,12 @@ elapsed = 0
 while elapsed < <timeout_minutes> * 60:
     snapshot = ci_status(<pr_number>)              # this op's MCP path
     if snapshot.status == "success":
-        return {status: "success", runs: snapshot.runs}
+        return {status: "success"}
     if snapshot.status == "failure":
-        return {status: "failure", runs: snapshot.runs}
+        return {status: "failure"}
     sleep poll_interval_seconds
     elapsed += poll_interval_seconds
-return {status: "timeout", runs: snapshot.runs}
+return {status: "timeout", timed_out: true}
 ```
 
 The polling loop runs in the caller's session (typically `ci-watchdog`'s long-running invocation). Unlike the gh path, this consumes session time proportional to CI duration. For a 60-minute CI run polled every 30 s, that's 120 status calls.
@@ -604,7 +604,7 @@ git rebase <base>
 git push --force-with-lease origin <branch>
 ```
 
-Same conflict detection as the gh path — if `git rebase` exits non-zero with conflict markers, return `{"success": false, "conflicts": [...]}` (list extracted from `git status --porcelain` output, filtered to `UU`-marked files). Return `{"success": true}` on clean rebase + push.
+Same conflict detection as the gh path — if `git rebase` exits non-zero with conflict markers, run `git rebase --abort` to leave the worktree clean, then return `{"success": false, "conflicts": [...]}` where the list comes from `git diff --name-only --diff-filter=U` (catches all conflict types: UU, AA, DD, DU, UD, UA, AU — not just both-modified). Return `{"success": true}` on clean rebase + push.
 
 The `<branch>` placeholder MUST match the same regex as the gh path (`^[A-Za-z0-9._/+-]+$` and no leading `-`) — Argument validation rules apply unchanged.
 
