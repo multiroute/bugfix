@@ -94,6 +94,26 @@ grep -qF "advocate **explicitly counters**" "$SKILL" || { echo "FAIL row 4 must 
 grep -qF "advocate **disputes or silent**"  "$SKILL" || { echo "FAIL row 5 must catch disputes-or-silent"; exit 1; }
 echo "OK  decision-rule rows 4 and 5 distinguish explicit-counter vs disputes-or-silent"
 
+# Reviewer prompts must branch on classification.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL pr-final-review must reference intake_classification"; exit 1; }
+echo "OK  reviewer prompts branch on classification"
+
+# Bug-class adversary check.
+grep -qiF "is the regression test real" "$SKILL" \
+  || { echo "FAIL adversary prompt missing 'is the regression test real' (bug class)"; exit 1; }
+echo "OK  bug-class adversary check documented"
+
+# Improvement-class adversary check.
+grep -qiF "free of regressions" "$SKILL" \
+  || { echo "FAIL adversary prompt missing 'free of regressions' (improvement class)"; exit 1; }
+echo "OK  improvement-class adversary check documented"
+
+# Backend-routed diff retrieval.
+grep -qF "adapter_backend" "$SKILL" \
+  || { echo "FAIL pr-final-review must reference adapter_backend for diff retrieval"; exit 1; }
+echo "OK  diff retrieval routes on adapter_backend"
+
 # STAGE COMPLETE footer must be present and contain the STOP HERE directive.
 grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
   || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }

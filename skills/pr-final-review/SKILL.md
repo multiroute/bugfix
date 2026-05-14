@@ -38,7 +38,7 @@ Read these into structured variables for substitution into the reviewer prompts:
 - **ticket_body:** call `bugfix:ticket-adapter:read(state.issue_number)`; extract `body` (which the adapter has already wrapped in `<untrusted-input>` tags). Do NOT strip the tags.
 - **spec_contents:** `cat state.spec_path`.
 - **plan_contents:** `cat state.plan_path`.
-- **diff:** `git diff state.base_sha..HEAD` from inside the worktree (post-rebase tip is HEAD).
+- **diff:** retrieve the PR diff via the backend-routed path described in "Diff retrieval by adapter backend" below; fall back to `git diff state.base_sha..HEAD` from inside the worktree (post-rebase tip is HEAD) only if the adapter call fails.
 - **regression_test_path:** `state.artifacts.regression_test_path` (set by `executing-plan`'s Task 1).
 - **regression_test_contents:** `cat <regression_test_path>` (if the path is non-empty).
 - **base_sha:** `state.base_sha`.
@@ -46,6 +46,35 @@ Read these into structured variables for substitution into the reviewer prompts:
 - **ci_summary:** call `bugfix:ticket-adapter:ci_status(state.pr_number)`; expect `{status: "success", runs: [...]}` since `ci-watchdog` already confirmed green. **If `ci_summary.status != "success"`, exit via `bugfix:block-and-comment(tech-failure, reason="CI regressed between ci-watchdog and pr-final-review", artifacts=[ci_summary])` — do NOT proceed to reviewer dispatch.** Otherwise summarize as text for the reviewer prompts.
 
 Emit `pr_review_started` event (detail: `{adversary_enabled: <bool>}`).
+
+### Diff retrieval by adapter backend
+
+Reviewers get the PR diff by calling the right tool for the active backend:
+
+- **When `state.artifacts.adapter_backend == "gh"`:** invoke `gh pr diff <state.pr_number>` via Bash. The output is plain unified diff.
+- **When `state.artifacts.adapter_backend == "mcp"`:** call `mcp__github__get_pull_request_files(owner=<state.owner>, repo=<state.repo>, pull_number=<state.pr_number>)` for the file list, then `mcp__github__get_pull_request_diff` (or the canonical MCP server's equivalent) for the unified diff body. Concatenate into the same format as the gh output.
+
+Both paths produce the same input shape for the reviewer prompts. Reviewers SHOULD NOT branch on backend themselves — this skill handles the routing once before dispatching.
+
+### Reviewer prompt branching by classification
+
+Both the advocate and adversary reviewer prompts include a classification-specific "what to look for" section. Read `state.artifacts.intake_classification` and use the matching block:
+
+**When `intake_classification == "bug"`:**
+
+> Look at the diff and the spec's "Repro steps" / "Expected behavior" / "Actual behavior" sections. Ask:
+> - Is the regression test real — does it actually exercise the reported repro and would it FAIL without the fix?
+> - Does the fix address the root cause, or just mask the symptom?
+> - Are there other code paths that exhibit the same bug that this PR doesn't touch?
+
+**When `intake_classification == "improvement"`:**
+
+> Look at the diff and the spec's "Desired outcome" / "Rationale" / "Out of scope" sections. Ask:
+> - Is the change scoped to the agreed outcome, or does it overshoot (out-of-scope refactors)?
+> - Is new behavior covered by tests? If not, is the absence of coverage justified?
+> - Is the change free of regressions — do existing tests still pass, and are there obvious behaviors the diff might silently change?
+
+The advocate and adversary use the same branching block; the difference between the two reviewers is their stance (advocate: probable PASS, looks for "is this defensible?"; adversary: probable FAIL, looks for "what would make me close this?").
 
 ## Step 3: Dispatch advocate + adversary in parallel
 
