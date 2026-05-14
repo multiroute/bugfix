@@ -7,11 +7,12 @@ FIXTURES="$PLUGIN_ROOT/tests/fixtures"
 validate() {
   local fixture="$1"
   local expect="$2"  # "valid" or "invalid"
-  if python3 -c "
-import json, sys
-from jsonschema import validate, ValidationError
-schema = json.load(open('$SCHEMA'))
-doc = json.load(open('$fixture'))
+  if PLUGIN_ROOT="$PLUGIN_ROOT" SCHEMA="$SCHEMA" FIXTURE="$fixture" python3 -c "
+import json, os, sys
+sys.path.insert(0, os.path.join(os.environ['PLUGIN_ROOT'], 'lib'))
+from jsonschema_mini import validate, ValidationError
+schema = json.load(open(os.environ['SCHEMA']))
+doc = json.load(open(os.environ['FIXTURE']))
 try:
     validate(doc, schema)
     print('valid')

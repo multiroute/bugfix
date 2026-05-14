@@ -14,11 +14,12 @@ line_count="$(wc -l < "$LOG")"
 echo "OK  first append wrote one line"
 
 # Case 1b: line is valid against events schema.
-python3 -c "
-import json
-from jsonschema import validate
-schema = json.load(open('$PLUGIN_ROOT/schemas/events.schema.json'))
-with open('$LOG') as f:
+PLUGIN_ROOT="$PLUGIN_ROOT" LOG="$LOG" python3 -c "
+import json, os, sys
+sys.path.insert(0, os.path.join(os.environ['PLUGIN_ROOT'], 'lib'))
+from jsonschema_mini import validate
+schema = json.load(open(os.path.join(os.environ['PLUGIN_ROOT'], 'schemas/events.schema.json')))
+with open(os.environ['LOG']) as f:
     for line in f:
         validate(json.loads(line), schema)
 " || { echo "FAIL appended line invalid against schema"; exit 1; }
@@ -42,6 +43,25 @@ if "$APPEND" "$LOG" intake_started intake 'not json' 2>/dev/null; then
   echo "FAIL invalid detail JSON should have been rejected"; exit 1
 else
   echo "OK  invalid detail JSON rejected"
+fi
+
+# Case 5: block_and_comment with valid exit_kind is accepted.
+"$APPEND" "$LOG" block_and_comment intake '{"exit_kind":"needs-info","reason":"missing info"}' \
+  || { echo "FAIL block_and_comment with valid exit_kind should be accepted"; exit 1; }
+echo "OK  block_and_comment with valid exit_kind accepted"
+
+# Case 6: block_and_comment without exit_kind is rejected (schema conditional).
+if "$APPEND" "$LOG" block_and_comment intake '{"reason":"forgot exit_kind"}' 2>/dev/null; then
+  echo "FAIL block_and_comment missing exit_kind should have been rejected"; exit 1
+else
+  echo "OK  block_and_comment missing exit_kind rejected"
+fi
+
+# Case 7: block_and_comment with exit_kind outside the enum is rejected.
+if "$APPEND" "$LOG" block_and_comment intake '{"exit_kind":"fatal"}' 2>/dev/null; then
+  echo "FAIL block_and_comment with bad exit_kind should have been rejected"; exit 1
+else
+  echo "OK  block_and_comment with bad exit_kind rejected"
 fi
 
 echo "PASS"

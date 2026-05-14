@@ -7,12 +7,13 @@ FIXTURES="$PLUGIN_ROOT/tests/fixtures"
 validate_jsonl() {
   local fixture="$1"
   local expect="$2"  # "valid" or "invalid"
-  python3 -c "
-import json
-from jsonschema import validate, ValidationError
-schema = json.load(open('$SCHEMA'))
+  PLUGIN_ROOT="$PLUGIN_ROOT" SCHEMA="$SCHEMA" FIXTURE="$fixture" python3 -c "
+import json, os, sys
+sys.path.insert(0, os.path.join(os.environ['PLUGIN_ROOT'], 'lib'))
+from jsonschema_mini import validate, ValidationError
+schema = json.load(open(os.environ['SCHEMA']))
 all_valid = True
-with open('$fixture') as f:
+with open(os.environ['FIXTURE']) as f:
     for i, line in enumerate(f, 1):
         line = line.strip()
         if not line:
