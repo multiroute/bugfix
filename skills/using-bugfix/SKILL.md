@@ -17,9 +17,11 @@ The bugfix plugin runs an autonomous bug-fix loop: ticket -> spec -> plan -> imp
 
 ## Loop discipline
 
-The loop has exactly one dispatcher: `bugfix:resume-run`. Stage skills (ticket-intake, writing-plans, executing-plan, autonomous-finishing, ci-watchdog, pr-final-review) are invoked BY resume-run, never by the agent directly. If you have data in context and feel the urge to skip the dispatcher and "just finish the work," STOP. That instinct is the failure mode the loop is designed to prevent.
+The loop has exactly one dispatcher: `bugfix:resume-run`. Stage skills (`ticket-intake`, `writing-plans`, `executing-plan`, `autonomous-finishing`, `ci-watchdog`, `pr-final-review`) are invoked BY resume-run, never by the agent directly.
 
-The PostToolUse hook will emit a reminder after each orchestration-skill invocation, pointing you back at resume-run. Honor it.
+You MUST NOT invoke a stage skill via the `Skill` tool yourself. You MUST NOT inline a stage's work (writing files, running tests, pushing branches) outside the dispatcher loop. Doing either violates the loop contract.
+
+If you have data in context and feel the urge to skip the dispatcher and "just finish the work," STOP. That instinct is the failure mode the loop is designed to prevent. The PostToolUse hook will emit a reminder after each orchestration-skill invocation, pointing you back at resume-run. Honor it.
 
 ## Instruction priority
 
