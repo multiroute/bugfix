@@ -79,24 +79,53 @@ This structure informs the task decomposition. Each task should produce self-con
 - "Commit" - step
 
 
-## Bug-fix plans: regression test first
+## Plan content depends on classification
 
-For bug-fix plans (created in response to a ticket), Task 1 MUST be:
+Before writing tasks, read `state.artifacts.intake_classification` (set by `ticket-intake`). The Task 1 rule branches:
 
-1. Write a failing test that reproduces the ticket's reported symptom.
-2. Run the test and verify it fails for the expected reason (not a setup error).
+### When `intake_classification == "bug"`: regression test first
 
-This is the regression test that gates the whole ticket. Implementation comes only AFTER Task 1's test exists and fails for the right reason. If the bug cannot be reproduced as a test (e.g., a UI rendering race), the planner MUST exit via `bugfix:block-and-comment(needs-info, reason="could not produce a failing test that reproduces the symptom")` rather than fabricate Task 1.
+Task 1 MUST be a failing regression test that exercises the repro steps from the spec and transitions FAIL on the base branch to PASS once the fix is in. This is non-negotiable for bug plans — the regression test is the loop's strongest guard against fake fixes.
 
-**Task 1 MUST declare the regression-test file path explicitly** as the first content line under the `### Task 1: ...` heading:
+Example Task 1 shape (substitute the bug's actual repro):
 
-```markdown
 ### Task 1: Regression test for <one-line bug description>
 
-**Regression test file:** tests/path/to/regression_test.py
+**Files:**
+- Test: `tests/<path>/test_<bug>.py`
+
+- [ ] **Step 1: Write the failing regression test**
+
+```python
+def test_<bug_name>():
+    # Exact reproduction from spec's "Repro steps" section.
+    result = <call_that_currently_misbehaves>
+    assert result == <expected_from_spec>
 ```
 
-Downstream stages (`bugfix:executing-plan`, `bugfix:ci-watchdog`, `bugfix:pr-final-review`) read this declaration to know which test file is the gating regression test. Do NOT rely on a `git diff` heuristic — multi-file Task 1s (test + helper, test + fixture) make that fragile. If Task 1 modifies more than one file, the declaration names the **single canonical regression test** the downstream stages should run; the other files are supporting infrastructure.
+- [ ] **Step 2: Run test, verify FAIL with the bug's actual behavior**
+
+Run: `pytest tests/<path>/test_<bug>.py::test_<bug_name> -v`
+Expected FAIL output: <paste the actual error message the user would see>
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/<path>/test_<bug>.py
+git commit -m "test: add failing regression test for <bug>"
+```
+
+Subsequent tasks implement the fix and verify the test transitions to PASS.
+
+### When `intake_classification == "improvement"`: Task 1 by judgment
+
+Improvement plans do NOT have a defect to reproduce, so the mandatory failing-test-first rule is relaxed. Task 1 is whatever structurally makes sense for the change:
+
+- If the improvement adds new behavior, Task 1 SHOULD be a test for that behavior (which fails because the behavior doesn't exist yet — same TDD cycle).
+- If the improvement is a refactor or cleanup with no behavior change, Task 1 MAY be the refactoring step itself, with existing tests proving non-regression.
+- If the improvement is documentation or comment cleanup, Task 1 MAY be the change itself.
+
+In all cases, the improvement plan SHOULD produce test coverage for any new behavior added. Coverage adequacy is judged by the plan reviewer (second-stage review below) and the PR-final-review adversary, not by a fixed rule.
 
 
 ## Plan Document Header

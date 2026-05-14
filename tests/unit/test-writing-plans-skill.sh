@@ -11,8 +11,8 @@ echo "OK  frontmatter name correct"
 grep -qF "Bite-Sized Task Granularity" "$SKILL" || { echo "FAIL upstream content missing"; exit 1; }
 echo "OK  upstream content vendored"
 
-# Modification A: reproduce-bug-first rule.
-grep -qF "Bug-fix plans: regression test first" "$SKILL" || { echo "FAIL reproduce-bug-first section missing"; exit 1; }
+# Modification A: reproduce-bug-first rule (under classification-conditional section).
+grep -qiF "regression test first" "$SKILL" || { echo "FAIL reproduce-bug-first rule heading missing"; exit 1; }
 grep -qF "Task 1 MUST be" "$SKILL" || { echo "FAIL reproduce-bug-first rule wording missing"; exit 1; }
 echo "OK  modification A (reproduce-bug-first) present"
 
@@ -48,8 +48,8 @@ for section in "## State writes" "## Events" "## Block-and-comment exits"; do
 done
 echo "OK  ## State writes / ## Events / ## Block-and-comment exits sections present"
 
-# R2-I7: Task 1 regression-test path must be declared explicitly, not inferred.
-grep -qF "**Regression test file:**" "$SKILL" || { echo "FAIL writing-plans must require Task 1 to declare regression-test file path explicitly"; exit 1; }
+# R2-I7: Task 1 regression-test path must be declared explicitly via Files section.
+grep -qF -- "- Test:" "$SKILL" || { echo "FAIL writing-plans must require Task 1 to declare regression-test file path explicitly"; exit 1; }
 echo "OK  Task 1 explicit regression-test file declaration required"
 
 # C6: lock acquisition must precede side-effects.
@@ -74,6 +74,21 @@ echo "OK  already-in-worktree detection documented (no spurious sibling worktree
 # for upstream feature workflows).
 grep -qF ".bugfix/plans/<ticket-id>.md" "$SKILL" || { echo "FAIL bugfix plan path missing"; exit 1; }
 echo "OK  bugfix plan path is .bugfix/plans/<ticket-id>.md"
+
+# Classification-conditional Task 1 rule.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL writing-plans must reference intake_classification"; exit 1; }
+echo "OK  references intake_classification"
+
+# Bug rule still present.
+grep -qiF "regression test" "$SKILL" \
+  || { echo "FAIL writing-plans must reference regression test (for bug class)"; exit 1; }
+echo "OK  bug-class regression-test rule present"
+
+# Improvement-class relaxation must be documented.
+grep -qiF "improvement plan" "$SKILL" \
+  || { echo "FAIL writing-plans must document improvement-class Task 1 relaxation"; exit 1; }
+echo "OK  improvement-class relaxation documented"
 
 # STAGE COMPLETE footer must be present and contain the STOP HERE directive.
 grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
