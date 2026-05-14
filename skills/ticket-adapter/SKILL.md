@@ -88,7 +88,7 @@ A ticket comment is a bot comment if **any** of these is true:
 2. `comment.authorAssociation == "BOT"` (case-sensitive — GitHub returns this enum in upper-case; do NOT normalize to lower before comparing).
 3. The comment's author login appears in `config.bot_author_allowlist` (an optional array of additional service-account logins like `our-ci-runner` that a host has explicitly marked as bot-equivalent). If `config.bot_author_allowlist` is absent or empty, only rules 1 and 2 apply.
 
-The `read()` operation surfaces a derived `is_bot` boolean per comment using all three rules. `resume-run` uses `is_bot` to filter out self-resumes and service-account chatter when scanning for human "resume" comments.
+The `read()` operation surfaces a derived `is_bot` boolean per comment using all three rules. `run-ticket`'s resume-from-blocked detection uses `is_bot` to filter out self-resumes and service-account chatter when scanning for human "resume" comments.
 
 **Resume token (case-insensitive):** a comment's body counts as a resume signal only if its first non-whitespace, non-tag-wrapper token matches `^resume$` (i.e., `resume` is the entire first word). Substring matches like "don't resume yet" or "I'll resume tomorrow" MUST NOT trigger. The recommended check:
 
