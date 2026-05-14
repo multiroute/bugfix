@@ -9,12 +9,11 @@ for f in \
   code-quality-reviewer-prompt.md \
   implementer-retry-prompt.md \
   plan-document-reviewer-prompt.md \
-  pr-final-reviewer-advocate-prompt.md \
-  pr-final-reviewer-adversary-prompt.md
+  pr-final-reviewer-prompt.md
 do
   [[ -f "$PROMPTS/$f" ]] || { echo "FAIL prompt missing: $f"; exit 1; }
 done
-echo "OK  all 5 prompt files exist"
+echo "OK  all 6 prompt files exist"
 
 grep -q "^# Implementer Subagent Prompt Template$" "$PROMPTS/implementer-prompt.md" \
   || { echo "FAIL implementer-prompt.md missing upstream header"; exit 1; }
@@ -52,31 +51,21 @@ grep -qF "Plan compliant" "$PROMPTS/plan-document-reviewer-prompt.md" \
 echo "OK  plan-document-reviewer-prompt.md correct"
 
 
-grep -q "^# PR Final Review — Advocate Subagent Prompt Template$" "$PROMPTS/pr-final-reviewer-advocate-prompt.md" \
-  || { echo "FAIL pr-final-reviewer-advocate-prompt.md missing header"; exit 1; }
+grep -q "^# PR Final Review Prompt Template$" "$PROMPTS/pr-final-reviewer-prompt.md" \
+  || { echo "FAIL pr-final-reviewer-prompt.md missing header"; exit 1; }
 for placeholder in "<<<TICKET_BODY>>>" "<<<SPEC_CONTENTS>>>" "<<<PLAN_CONTENTS>>>" "<<<DIFF>>>" "<<<REGRESSION_TEST_PATH>>>" "<<<BASE_SHA>>>" "<<<PR_BRANCH>>>" "<<<CI_SUMMARY>>>"; do
-  grep -qF "$placeholder" "$PROMPTS/pr-final-reviewer-advocate-prompt.md" \
-    || { echo "FAIL pr-final-reviewer-advocate-prompt.md missing placeholder $placeholder"; exit 1; }
+  grep -qF "$placeholder" "$PROMPTS/pr-final-reviewer-prompt.md" \
+    || { echo "FAIL pr-final-reviewer-prompt.md missing placeholder $placeholder"; exit 1; }
 done
-grep -qF "Ready: yes | conditional | no" "$PROMPTS/pr-final-reviewer-advocate-prompt.md" \
-  || { echo "FAIL advocate prompt missing 'Ready: yes | conditional | no' verdict line"; exit 1; }
-echo "OK  pr-final-reviewer-advocate-prompt.md correct"
-
-grep -q "^# PR Final Review — Adversary Subagent Prompt Template$" "$PROMPTS/pr-final-reviewer-adversary-prompt.md" \
-  || { echo "FAIL pr-final-reviewer-adversary-prompt.md missing header"; exit 1; }
-for placeholder in "<<<TICKET_BODY>>>" "<<<SPEC_CONTENTS>>>" "<<<PLAN_CONTENTS>>>" "<<<DIFF>>>" "<<<REGRESSION_TEST_PATH>>>" "<<<BASE_SHA>>>" "<<<PR_BRANCH>>>" "<<<CI_SUMMARY>>>"; do
-  grep -qF "$placeholder" "$PROMPTS/pr-final-reviewer-adversary-prompt.md" \
-    || { echo "FAIL pr-final-reviewer-adversary-prompt.md missing placeholder $placeholder"; exit 1; }
+grep -qF "Critical findings:" "$PROMPTS/pr-final-reviewer-prompt.md" \
+  || { echo "FAIL pr-final-reviewer-prompt.md missing 'Critical findings:' output"; exit 1; }
+grep -qF "Important findings:" "$PROMPTS/pr-final-reviewer-prompt.md" \
+  || { echo "FAIL pr-final-reviewer-prompt.md missing 'Important findings:' output"; exit 1; }
+for kw in "Scope creep" "Weak regression test" "Missing adjacent regression coverage" "doesn't address symptom" "Unrelated changes" "Security" "Performance" "Commit hygiene" "Untrusted-input handling"; do
+  grep -qF "$kw" "$PROMPTS/pr-final-reviewer-prompt.md" \
+    || { echo "FAIL pr-final-reviewer-prompt.md missing failure-mode '$kw'"; exit 1; }
 done
-grep -qF "Critical findings:" "$PROMPTS/pr-final-reviewer-adversary-prompt.md" \
-  || { echo "FAIL adversary prompt missing 'Critical findings:' output"; exit 1; }
-grep -qF "Important findings:" "$PROMPTS/pr-final-reviewer-adversary-prompt.md" \
-  || { echo "FAIL adversary prompt missing 'Important findings:' output"; exit 1; }
-for kw in "Scope creep" "Weak regression test" "Missing adjacent regression coverage" "doesn't address symptom" "Unrelated changes" "Security" "Commit hygiene" "Untrusted-input handling"; do
-  grep -qF "$kw" "$PROMPTS/pr-final-reviewer-adversary-prompt.md" \
-    || { echo "FAIL adversary prompt missing failure-mode '$kw'"; exit 1; }
-done
-echo "OK  pr-final-reviewer-adversary-prompt.md correct"
+echo "OK  pr-final-reviewer-prompt.md correct"
 
 # R2-I1: every implementer/reviewer prompt must include the untrusted-input preamble.
 # A ticket-derived spec/plan/comment flows transitively into these prompts; without
