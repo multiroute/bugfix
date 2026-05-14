@@ -50,6 +50,16 @@ Task tool (general-purpose):
     **While you work:** If you encounter something unexpected or unclear, **ask questions**.
     It's always OK to pause and clarify. Don't guess or make assumptions.
 
+    ## Environment & Test Commands
+
+    Detect the project's tooling from files in the working directory; do NOT improvise. In particular:
+
+    - **Python projects using uv** (look for `uv.lock`, or `pyproject.toml` with a `[tool.uv]` table / a `uv` field): install dependencies with `uv sync` and run tests with `uv run pytest ...`. Do NOT activate `.venv` directly, do NOT invoke `python -m pytest` or bare `pytest` — `uv run` resolves the project environment correctly even when `.venv` is missing or stale.
+    - **Python projects without uv**: fall back to the project's documented command (`pytest`, `python -m pytest`, `make test`, etc.). If unclear, ASK before running tests.
+    - **Other languages**: use the project-appropriate command (`npm test`, `cargo test`, `go test ./...`, `make test`).
+
+    If a test command fails for an environmental reason (missing dependency, venv not present, wrong interpreter), STOP and ask — do not paper over it by switching shells, backgrounding, or invoking interpreters directly.
+
     ## Code Organization
 
     You reason best about code you can hold in context at once, and your edits are more
