@@ -147,4 +147,10 @@ for mcp_op in "mcp__github__get_issue" "mcp__github__add_issue_comment" "mcp__gi
 done
 echo "OK  MCP issue-op tools documented (get_issue, add_issue_comment, update_issue, list_issues)"
 
+# MCP paths for PR operations.
+for mcp_op in "mcp__github__create_pull_request" "mcp__github__update_pull_request"; do
+  grep -qF "$mcp_op" "$SKILL" || { echo "FAIL adapter missing MCP op: $mcp_op"; exit 1; }
+done
+echo "OK  MCP PR-op tools documented (create_pull_request, update_pull_request)"
+
 echo "PASS"

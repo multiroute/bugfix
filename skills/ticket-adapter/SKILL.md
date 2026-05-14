@@ -348,6 +348,18 @@ gh pr create --base "<base>" --head "<branch>" --title "<title>" --body-file -
 
 **Errors:** non-zero exit -> `{ "error": "<stderr>" }`.
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+pr = mcp__github__create_pull_request(owner=<state.owner>, repo=<state.repo>, title=<title>, body=<body>, head=<branch>, base=<base>)
+```
+
+Return `{"pr_number": pr.number}` (integer) for shape parity. The PR URL is constructed by the caller (`autonomous-finishing`) as `https://github.com/<state.owner>/<state.repo>/pull/<pr_number>`.
+
+Same title/body validation rules apply (length cap, control-char stripping).
+
 ### pr_comment
 
 **Signature:** `pr_comment(pr_number, body) -> {comment_id}`
@@ -364,6 +376,16 @@ gh pr comment "<pr_number>" --body-file -
 **Return shape:** `{ "comment_id": "<string>" }`.
 
 **Errors:** non-zero -> `{ "error": "<stderr>" }`. Same 65536-char body limit as ticket_comment.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+result = mcp__github__add_issue_comment(owner=<state.owner>, repo=<state.repo>, issue_number=<pr_number>, body=<body>)
+```
+
+GitHub treats PR comments as issue comments at the REST/API level, so the same op handles both. Return `{"comment_id": result.id}`.
 
 ### pr_close
 
@@ -383,6 +405,18 @@ gh pr close "<pr_number>"
 **Output parsing:** none beyond exit code.
 
 **Return shape:** `{ "ok": true }` or `{ "error": "<stderr>" }`.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+# Two-step: post the close reason as a comment first, then close.
+mcp__github__add_issue_comment(owner=<state.owner>, repo=<state.repo>, issue_number=<pr_number>, body=<close_reason>)
+mcp__github__update_pull_request(owner=<state.owner>, repo=<state.repo>, pull_number=<pr_number>, state="closed")
+```
+
+Return `{"ok": true}`. If `update_pull_request` is not exposed by the MCP server (some servers expose only create + read), the adapter MUST surface a clear `{"error": "MCP server lacks update_pull_request — cannot close PR via MCP backend"}` rather than silently switching backends. Backend consistency rules forbid mid-run switching.
 
 ### ci_status
 
