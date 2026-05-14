@@ -23,9 +23,12 @@ grep -q "ticket-adapter:ticket_comment" "$SKILL" || { echo "FAIL missing ticket-
 grep -q "ticket-adapter:set_status" "$SKILL" || { echo "FAIL missing ticket-adapter:set_status reference"; exit 1; }
 echo "OK  adapter operation references present"
 
-# Must mention the lock-release step (required by spec §6.1 effects list).
-grep -qi "release.*lock\|lock-release" "$SKILL" || { echo "FAIL missing lock release instruction"; exit 1; }
-echo "OK  lock release mentioned"
+# Lock infrastructure was removed (single-session driver — no concurrency races to protect against).
+if grep -qiE "release.*lock|lock-release" "$SKILL"; then
+  echo "FAIL block-and-comment still references lock release after locks were removed"
+  exit 1
+fi
+echo "OK  no lock-release references"
 
 # R3-I4: idempotency must include a concrete dedupe mechanism, not just the word.
 grep -qiF "Idempotency check" "$SKILL" || { echo "FAIL missing concrete idempotency check"; exit 1; }

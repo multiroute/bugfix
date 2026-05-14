@@ -1,21 +1,20 @@
 ---
 name: ticket-intake
-description: Use as the first stage of the autonomous bug-fix loop. Reads the GitHub issue via `bugfix:ticket-adapter`, classifies as bug/improvement/not-actionable, extracts repro/expected/actual for bugs, writes a spec file, sets the ticket status to in-progress, and advances state to planning. Dispatched by `bugfix:resume-run` when `state.current_stage == "intake"`.
+description: Use as the first stage of the autonomous bug-fix loop. Reads the GitHub issue via `bugfix:ticket-adapter`, classifies as bug/improvement/not-actionable, extracts repro/expected/actual for bugs, writes a spec file, sets the ticket status to in-progress, and advances state to planning. Dispatched by `bugfix:run-ticket` when `state.current_stage == "intake"`.
 ---
 
 # bugfix:ticket-intake
 
 The first stage of the autonomous loop. Turns a GitHub issue into a spec file the planner can work against.
 
-**Recommended model: Haiku.** This stage is mechanical text manipulation — read the ticket body, classify against a fixed trichotomy (bug | improvement | not-actionable), extract structured repro/expected/actual fields, write the spec. No multi-file design judgment, no codebase exploration. A host driving this stage via `bugfix:resume-run` from external scheduling SHOULD honor `config.model_hints.stages.intake` (default: `"haiku"`). In-session hosts (`bugfix:run-ticket` long-running loop) inherit the session model; if that model is heavier than Haiku, the stage still works but at higher cost than necessary.
+**Recommended model: Haiku.** This stage is mechanical text manipulation — read the ticket body, classify against a fixed trichotomy (bug | improvement | not-actionable), extract structured repro/expected/actual fields, write the spec. No multi-file design judgment, no codebase exploration. The single-session `bugfix:run-ticket` driver inherits the session model; if that model is heavier than Haiku, the stage still works but at higher cost than necessary.
 
 ## State-file-first context
 
-This skill is dispatched by `bugfix:resume-run` when `state.current_stage == "intake"`. Before doing any work:
+This skill is dispatched by `bugfix:run-ticket` when `state.current_stage == "intake"`. Before doing any work:
 
-1. Read `.bugfix/runs/<ticket_id>.json`. Confirm `current_stage == "intake"`. If not, exit with an error (resume-run should not have dispatched).
+1. Read `.bugfix/runs/<ticket_id>.json`. Confirm `current_stage == "intake"`. If not, exit with an error (the driver should not have dispatched).
 2. Read `state.owner`, `state.repo`, `state.issue_number`. These were initialized by `run-ticket` from the URL parse.
-3. Acquire the lock via `bugfix/lib/lock-acquire.sh ".bugfix/runs/<ticket_id>.lock" "<session_id>" "intake"`. If acquire fails (exit 1 = live holder, exit 3 = I/O failure), exit cleanly — resume-run will retry.
 
 ## Operations called
 
@@ -107,8 +106,8 @@ Use `bugfix:block-and-comment` for these cases:
 | `ticket-adapter:read` returned `{error: "..."}`  | `tech-failure` | Attach the adapter's error message. |
 | `ticket-adapter:set_status` returned an error | `tech-failure` | Attach the adapter's error message. May indicate first-run labels not created (see ticket-adapter §5.3). |
 
-After block-and-comment runs, do NOT advance `current_stage`. Release the lock and exit.
+After block-and-comment runs, do NOT advance `current_stage`. Exit.
 
 ## Next stage
 
-On success: write `state.current_stage = "planning"`, release the lock via `bugfix/lib/lock-release.sh`, exit. `resume-run` will dispatch `bugfix:writing-plans` on its next invocation.
+On success: write `state.current_stage = "planning"`, exit. `bugfix:run-ticket` will dispatch `bugfix:writing-plans` on its next loop iteration.

@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# Transition-graph lint (R4 #1 from deep code review).
+# Transition-graph lint.
 #
 # Verifies that the stage-machine transition graph is consistent across the
-# 5 places it's currently duplicated:
+# 3 places it's currently duplicated:
 #
 # - run-state.schema.json:current_stage.enum (6 stages)
-# - lock.schema.json:stage.enum
 # - events.schema.json:stage.enum
-# - lib/lock-acquire.sh case statement
-# - resume-run/SKILL.md dispatch table
+# - run-ticket/SKILL.md dispatch table
 #
-# Catches the regression class where a maintainer adds/renames a stage in
-# only one of the five locations.
+# (Lock schema, lib/lock-acquire.sh, and resume-run's dispatch table were
+# removed when the plugin dropped split-session mode; run-ticket's inlined
+# dispatch table is the new single source of truth alongside the two schemas.)
 set -euo pipefail
 PLUGIN_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
@@ -26,14 +25,6 @@ print('\n'.join(sorted(schema['properties']['current_stage']['enum'])))
 "
 }
 
-extract_lock_schema() {
-  python3 -c "
-import json
-schema = json.load(open('$PLUGIN_ROOT/schemas/lock.schema.json'))
-print('\n'.join(sorted(schema['properties']['stage']['enum'])))
-"
-}
-
 extract_events_schema() {
   python3 -c "
 import json
@@ -42,17 +33,9 @@ print('\n'.join(sorted(schema['properties']['stage']['enum'])))
 "
 }
 
-extract_lock_acquire() {
-  # Find the case statement and extract the | separated stages.
-  grep -E '^[[:space:]]*intake\|planning\|executing\|finishing\|ci-watching\|pr-reviewing\)' "$PLUGIN_ROOT/lib/lock-acquire.sh" \
-    | sed 's/) ;;//; s/)//' | tr '|' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sort
-}
-
-extract_resume_run_table() {
+extract_run_ticket_table() {
   # The dispatch table has lines like "| `<stage>` | `skills/.../SKILL.md` |".
-  # Tighten the match on the 2nd column ("\`skills/") so the per-stage
-  # model-hints table — same first-column shape — doesn't leak in.
-  grep -E '^\| `[a-z-]+` \| `skills/' "$PLUGIN_ROOT/skills/resume-run/SKILL.md" \
+  grep -E '^\| `[a-z-]+` \| `skills/' "$PLUGIN_ROOT/skills/run-ticket/SKILL.md" \
     | sed -E 's/^\| `([a-z-]+)` .*/\1/' | sort
 }
 
@@ -69,18 +52,15 @@ compare() {
 }
 
 compare "run-state.schema.json"   "$(extract_state_schema)"
-compare "lock.schema.json"        "$(extract_lock_schema)"
 compare "events.schema.json"      "$(extract_events_schema)"
-compare "lib/lock-acquire.sh"     "$(extract_lock_acquire)"
-compare "resume-run/SKILL.md"     "$(extract_resume_run_table)"
+compare "run-ticket/SKILL.md"     "$(extract_run_ticket_table)"
 
-# Also verify that for each stage in resume-run's table, the mapped skill file exists.
+# Verify that for each stage in run-ticket's table, the mapped skill file exists.
 python3 <<PY
 import re, os
 plugin_root = "$PLUGIN_ROOT"
-with open(os.path.join(plugin_root, "skills/resume-run/SKILL.md")) as f:
+with open(os.path.join(plugin_root, "skills/run-ticket/SKILL.md")) as f:
     body = f.read()
-# Match lines like: | \`intake\` | \`skills/ticket-intake/SKILL.md\` |
 pat = re.compile(r'^\| \`([a-z-]+)\` \| \`(skills/[^/]+/SKILL\.md)\` \|', re.M)
 missing = []
 for stage, path in pat.findall(body):

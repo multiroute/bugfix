@@ -15,7 +15,6 @@ for s in \
   "autonomous-finishing" \
   "ci-watchdog" \
   "pr-final-review" \
-  "resume-run" \
   "ticket-adapter" \
   "block-and-comment" \
   "using-git-worktrees" \
@@ -29,6 +28,13 @@ do
   grep -q "bugfix:$s" "$SKILL" || { echo "FAIL using-bugfix doesn't reference bugfix:$s"; exit 1; }
 done
 echo "OK  catalog references present"
+
+# resume-run was folded into run-ticket; using-bugfix must not reference the deleted skill.
+if grep -qF "bugfix:resume-run" "$SKILL"; then
+  echo "FAIL using-bugfix still references the deleted bugfix:resume-run skill"
+  exit 1
+fi
+echo "OK  no references to deleted bugfix:resume-run"
 
 # Must declare frontmatter name=using-bugfix.
 grep -q "^name: using-bugfix$" "$SKILL" || { echo "FAIL frontmatter name wrong"; exit 1; }

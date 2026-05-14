@@ -10,25 +10,12 @@
     "model_hints": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Host-agnostic model preferences. Sub-agent keys (planner/implementer/reviewer/adversary) hint at the model for sub-agents the loop dispatches; stages.* hints at the model the host should use to run each stage skill itself when driving via resume-run from external scheduling. Values are short class names ('haiku', 'sonnet', 'opus') that the host translates to concrete model IDs.",
+      "description": "Host-agnostic model preferences for sub-agents the loop dispatches. Values are short class names ('haiku', 'sonnet', 'opus') that the host translates to concrete model IDs. The single-session driver (bugfix:run-ticket) inherits the session model for stages themselves; these keys configure sub-agent dispatch within the loop.",
       "properties": {
         "planner":     { "type": "string" },
         "implementer": { "type": "string" },
         "reviewer":    { "type": "string" },
-        "adversary":   { "type": "string" },
-        "stages": {
-          "type": "object",
-          "additionalProperties": false,
-          "description": "Per-stage model hints. Defaults (when the key is absent): intake -> haiku (mechanical classification + spec extraction), ci-watching -> haiku (mechanical polling loop; fix sub-agents it dispatches still get implementer-level models). All other stages default to the host's session model — they involve real reasoning (planning, executing, finishing, pr-reviewing).",
-          "properties": {
-            "intake":       { "type": "string" },
-            "planning":     { "type": "string" },
-            "executing":    { "type": "string" },
-            "finishing":    { "type": "string" },
-            "ci-watching":  { "type": "string" },
-            "pr-reviewing": { "type": "string" }
-          }
-        }
+        "adversary":   { "type": "string" }
       }
     },
     "retry_budgets": {

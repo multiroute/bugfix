@@ -1,6 +1,6 @@
 ---
 name: block-and-comment
-description: Use when an autonomous bugfix stage needs human input and cannot proceed - posts a structured ticket comment, persists state, releases the lock, and exits cleanly. The single pause point for the whole autonomous loop.
+description: Use when an autonomous bugfix stage needs human input and cannot proceed - posts a structured ticket comment, persists state, and exits cleanly. The single pause point for the whole autonomous loop.
 ---
 
 # block-and-comment
@@ -32,14 +32,13 @@ You will be inside a stage skill (e.g. `bugfix:ticket-intake`, `bugfix:executing
 
 ### Effects (in this order, idempotently)
 
-**Idempotency check (run before any side effect):** read `.bugfix/runs/<ticket_id>.json`. If `state.blocked_reason == reason` AND `state.artifacts.last_block_comment_id` is present, this is a re-invocation of the same block (e.g., the caller crashed mid-step-3 and re-ran). Skip the `ticket_comment` step (effect 2) — posting a duplicate ticket comment is bad operator UX. Still run effects 3-6 because they're idempotent (set_status, append-event, release-lock, return) and may have been incomplete. The dedupe key is the tuple `(reason, exit_kind)`.
+**Idempotency check (run before any side effect):** read `.bugfix/runs/<ticket_id>.json`. If `state.blocked_reason == reason` AND `state.artifacts.last_block_comment_id` is present, this is a re-invocation of the same block (e.g., the caller crashed mid-step-3 and re-ran). Skip the `ticket_comment` step (effect 2) — posting a duplicate ticket comment is bad operator UX. Still run effects 3-5 because they're idempotent (set_status, append-event, return) and may have been incomplete. The dedupe key is the tuple `(reason, exit_kind)`.
 
 1. **Persist** `blocked_reason` (string) and `blocked_questions` (array) into `.bugfix/runs/<ticket_id>.json`. **Do NOT advance `current_stage`** - it stays at the stage that blocked.
 2. **Comment** on the ticket via `bugfix:ticket-adapter:ticket_comment` with the comment template below. Record the returned `comment_id` at `state.artifacts.last_block_comment_id` so the idempotency check above can detect duplicates on re-invocation. Skipped if the idempotency check fired.
 3. **Set status** via `bugfix:ticket-adapter:set_status`: `"needs-info"` for `exit_kind` of `needs-info` or `tech-failure`; `"rejected"` for `rejected`. Idempotent — re-applying the same status is a no-op.
 4. **Append** a `block_and_comment` event to `.bugfix/runs/<ticket_id>.events.log` via `bugfix/lib/events-append.sh`. `detail` should include `reason`, `exit_kind`, and the number of questions. The event is appended unconditionally — the events log is an audit trail, so a duplicate audit entry on retry is acceptable (and signals the retry happened).
-5. **Release the lock** at `.bugfix/runs/<ticket_id>.lock` via `bugfix/lib/lock-release.sh` (with the caller's `session_id` for ownership-checked release). The lock MUST be released even though state remains non-terminal - a blocked ticket is not actively being worked on.
-6. **Return the sentinel `BLOCKED` to the caller.** The caller must exit cleanly without writing the next-stage marker.
+5. **Return the sentinel `BLOCKED` to the caller.** The caller must exit cleanly without writing the next-stage marker.
 
 ### Caller obligation
 
@@ -91,4 +90,4 @@ These rules survive across stages, so they live in this skill, not in each calle
 
 ## Resume protocol (for reference)
 
-A human resumes the ticket by commenting `resume` on it (case-insensitive). `bugfix:resume-run` detects this and clears `blocked_reason` before re-dispatching the stored stage. Comments authored by bot accounts must be ignored when scanning for the `resume` token; only a non-bot author triggers resumption. The GitHub reference adapter is responsible for distinguishing bot vs human authors.
+A human resumes the ticket by commenting `resume` on it (case-insensitive). The next `fix bug <url>` invocation re-enters `bugfix:run-ticket`, which detects the resume signal in the ticket comments and clears `blocked_reason` before re-dispatching the stored stage. Comments authored by bot accounts must be ignored when scanning for the `resume` token; only a non-bot author triggers resumption. The GitHub reference adapter is responsible for distinguishing bot vs human authors.

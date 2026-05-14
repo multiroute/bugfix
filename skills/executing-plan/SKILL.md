@@ -5,14 +5,13 @@ description: Use when executing implementation plans with independent tasks in t
 
 ## State-file-first context
 
-This skill is invoked by `bugfix:resume-run` when `state.current_stage == "executing"`. Before doing any work:
+This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "executing"`. Before doing any work:
 
 1. Read `.bugfix/runs/<ticket-id>.json` and confirm `current_stage == "executing"`. If not, exit with an error.
-2. Acquire the lock via `bugfix/lib/lock-acquire.sh ".bugfix/runs/<ticket-id>.lock" "<session_id>" "executing"`.
-3. cd into the worktree at `state.worktree_path` (created by `writing-plans` in the prior stage).
-4. Read the plan at `state.plan_path` once and extract all tasks into working memory (per the upstream skill's pattern below).
-5. Run the per-task loop (see body below) following the modifications in this skill that extend the upstream subagent-driven-development pattern.
-6. After every task completes review-clean: set `state.current_stage = "finishing"`, release the lock, exit.
+2. cd into the worktree at `state.worktree_path` (created by `writing-plans` in the prior stage).
+3. Read the plan at `state.plan_path` once and extract all tasks into working memory (per the upstream skill's pattern below).
+4. Run the per-task loop (see body below) following the modifications in this skill that extend the upstream subagent-driven-development pattern.
+5. After every task completes review-clean: set `state.current_stage = "finishing"`, exit.
 
 If a task's reviews exhaust their retry budget, exit via `bugfix:block-and-comment(tech-failure)` per the per-task escalation below.
 
@@ -320,7 +319,7 @@ Done!
 - **bugfix:test-driven-development** - Subagents follow TDD for each task
 
 **Alternative workflow:**
-- (note: bugfix does NOT ship a separate executing-plans plural variant — the loop's `bugfix:resume-run` dispatches this skill for in-session execution, and fresh-session-per-stage execution uses `bugfix:resume-run` directly)
+- (note: bugfix does NOT ship a separate executing-plans plural variant — the loop's `bugfix:run-ticket` driver dispatches this skill directly)
 
 ## State writes after Task 1 (regression test)
 
@@ -341,8 +340,7 @@ After all tasks complete (final code-reviewer subagent approves the full diff pe
 
 1. Read `.bugfix/runs/<ticket-id>.json`, set `state.current_stage = "finishing"`, set `state.updated_at = <now>`, write back.
 2. Emit `task_done` for the last task (with detail `{"task_number": N}`) via `bugfix/lib/events-append.sh`. Do NOT emit any finishing-stage events here — `autonomous-finishing` owns those.
-3. Release the lock via `bugfix/lib/lock-release.sh`.
-4. Exit cleanly. `bugfix:resume-run` will dispatch `bugfix:autonomous-finishing` on its next invocation.
+3. Exit cleanly. `bugfix:run-ticket` will dispatch `bugfix:autonomous-finishing` on its next loop iteration.
 
 ## State writes (summary)
 

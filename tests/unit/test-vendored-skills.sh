@@ -12,7 +12,6 @@ for s in \
   "skills/autonomous-finishing/SKILL.md" \
   "skills/ci-watchdog/SKILL.md" \
   "skills/pr-final-review/SKILL.md" \
-  "skills/resume-run/SKILL.md" \
   "skills/ticket-adapter/SKILL.md" \
   "skills/block-and-comment/SKILL.md" \
   "skills/using-git-worktrees/SKILL.md" \
