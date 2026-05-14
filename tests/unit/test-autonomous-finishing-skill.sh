@@ -42,6 +42,13 @@ grep -qiF "refuses to proceed" "$SKILL" || grep -qiF "refuse to proceed" "$SKILL
   || { echo "FAIL must document refusal on failing tests"; exit 1; }
 echo "OK  test-failure refusal documented"
 
+# Lock infrastructure was removed.
+if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
+  echo "FAIL autonomous-finishing still references lock infrastructure"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
+
 # STAGE COMPLETE footer must be present and contain the STOP HERE directive.
 grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
   || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }

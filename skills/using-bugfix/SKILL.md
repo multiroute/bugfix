@@ -17,11 +17,11 @@ The bugfix plugin runs an autonomous bug-fix loop: ticket -> spec -> plan -> imp
 
 ## Loop discipline
 
-The loop has exactly one dispatcher: `bugfix:resume-run`. Stage skills (`ticket-intake`, `writing-plans`, `executing-plan`, `autonomous-finishing`, `ci-watchdog`, `pr-final-review`) are invoked BY resume-run, never by the agent directly.
+The loop has exactly one dispatcher: `bugfix:run-ticket`'s driver loop. Stage skills (`ticket-intake`, `writing-plans`, `executing-plan`, `autonomous-finishing`, `ci-watchdog`, `pr-final-review`) are invoked BY the driver loop, never by the agent directly.
 
 You MUST NOT invoke a stage skill via the `Skill` tool yourself. You MUST NOT inline a stage's work (writing files, running tests, pushing branches) outside the dispatcher loop. Doing either violates the loop contract.
 
-If you have data in context and feel the urge to skip the dispatcher and "just finish the work," STOP. That instinct is the failure mode the loop is designed to prevent. The PostToolUse hook will emit a reminder after each orchestration-skill invocation, pointing you back at resume-run. Honor it.
+If you have data in context and feel the urge to skip the dispatcher and "just finish the work," STOP. That instinct is the failure mode the loop is designed to prevent. The PostToolUse hook will emit a reminder after each orchestration-skill invocation, pointing you back at `bugfix:run-ticket`. Honor it.
 
 ## Instruction priority
 
@@ -33,11 +33,11 @@ User instructions always take precedence over skills. If CLAUDE.md / AGENTS.md s
 
 ## Front-door driver
 
-- `bugfix:run-ticket` - Recognizes "fix bug/issue <github-url>" requests, parses the URL, initializes run state under `.bugfix/runs/<ticket-id>.json`, acquires the per-ticket lock, and loops `bugfix:resume-run` until the ticket reaches a terminal state or blocks for human input.
+- `bugfix:run-ticket` - Recognizes "fix bug/issue <github-url>" requests, parses the URL, initializes run state under `.bugfix/runs/<ticket-id>.json`, and loops through the stage skills until the ticket reaches a terminal state or blocks for human input.
 
 ## Stage skills
 
-The autonomous loop progresses through these stage skills in order. You generally don't invoke them directly — `bugfix:run-ticket` and `bugfix:resume-run` dispatch them.
+The autonomous loop progresses through these stage skills in order. You generally don't invoke them directly — `bugfix:run-ticket` dispatches them via its inlined per-stage loop.
 
 - `bugfix:ticket-intake` - Reads the ticket via ticket-adapter, classifies it, writes a spec file.
 - `bugfix:writing-plans` - Creates a per-ticket worktree and writes an implementation plan. Bug-fix plans require a failing regression test as Task 1.
@@ -45,8 +45,6 @@ The autonomous loop progresses through these stage skills in order. You generall
 - `bugfix:autonomous-finishing` - Verifies tests pass, pushes the branch, opens a PR, comments the ticket.
 - `bugfix:ci-watchdog` - Polls CI on the opened PR. On failure: dispatches a fix sub-agent (bounded retries). On success: advances to PR-level final review.
 - `bugfix:pr-final-review` - Terminal stage. Rebases the PR, dispatches advocate + adversary reviewers in parallel, applies decision rule. Outcomes: `merge-ready` (human merges manually), `pr-closed`, or block-for-human-resolution.
-- `bugfix:resume-run` - Dispatches the next stage when invoked from a fresh session (or from `run-ticket`'s in-process loop).
-
 ## Quality discipline + primitives
 
 Use these any time the situation matches their description (the quality skills are vendored from `obra/superpowers` and apply to manual work just as much as autonomous loop runs):

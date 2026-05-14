@@ -1,22 +1,21 @@
 ---
 name: ci-watchdog
-description: Use as the post-PR-opened stage of the autonomous bug-fix loop. Waits for CI on the open PR via `bugfix:ticket-adapter:ci_watch`, dispatches a fix sub-agent on failure (bounded retries), advances state to pr-reviewing on success. Dispatched by `bugfix:resume-run` when `state.current_stage == "ci-watching"`.
+description: Use as the post-PR-opened stage of the autonomous bug-fix loop. Waits for CI on the open PR via `bugfix:ticket-adapter:ci_watch`, dispatches a fix sub-agent on failure (bounded retries), advances state to pr-reviewing on success. Dispatched by `bugfix:run-ticket` when `state.current_stage == "ci-watching"`.
 ---
 
 # bugfix:ci-watchdog
 
 Watches CI on the PR opened by `autonomous-finishing`. On `success` → advance to `pr-reviewing`. On `failure` → dispatch a fix sub-agent (bounded retries) → resume watching. On retry exhaustion or watch timeout → block-and-comment.
 
-**Recommended model: Haiku for the watchdog controller itself.** The controller's work is mechanical: snapshot CI, call `ci_watch` if pending, classify the result, dispatch a fix sub-agent on failure. A host driving this stage via `bugfix:resume-run` from external scheduling SHOULD honor `config.model_hints.stages.ci-watching` (default: `"haiku"`). **The fix sub-agent dispatched on CI failure is a separate concern** — that sub-agent does real implementation work and should run at implementer-class (the same model the executing-plan implementer would use). The watchdog body explicitly passes `model_hint = config.model_hints.implementer` (default: the host's implementer tier) when constructing the fix-sub-agent dispatch.
+**Recommended model: Haiku for the watchdog controller itself.** The controller's work is mechanical: snapshot CI, call `ci_watch` if pending, classify the result, dispatch a fix sub-agent on failure. The single-session `bugfix:run-ticket` driver inherits the session model, so this recommendation is informational — useful when the host can choose to spawn a cheaper model. **The fix sub-agent dispatched on CI failure is a separate concern** — that sub-agent does real implementation work and should run at implementer-class (the same model the executing-plan implementer would use). The watchdog body explicitly passes `model_hint = config.model_hints.implementer` (default: the host's implementer tier) when constructing the fix-sub-agent dispatch.
 
 ## State-file-first context
 
-This skill is invoked by `bugfix:resume-run` when `state.current_stage == "ci-watching"`. Before doing any work:
+This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "ci-watching"`. Before doing any work:
 
 1. Read `.bugfix/runs/<ticket-id>.json`. Confirm `current_stage == "ci-watching"`. If not, exit with an error.
 2. Confirm `state.pr_number != null` (set by `autonomous-finishing`). If null, exit via `bugfix:block-and-comment(tech-failure, reason="ci-watchdog dispatched with no pr_number — autonomous-finishing should have set it")`.
-3. Acquire the lock via `bugfix/lib/lock-acquire.sh ".bugfix/runs/<ticket-id>.lock" "<session_id>" "ci-watching"`. If acquire fails, exit cleanly — resume-run will retry.
-4. cd into `state.worktree_path`. All fix-related git operations run inside the worktree.
+3. cd into `state.worktree_path`. All fix-related git operations run inside the worktree.
 
 ## Polling loop
 
@@ -33,7 +32,7 @@ while True:
         consecutive_adapter_errors += 1
         if consecutive_adapter_errors >= 3:
             block-and-comment(tech-failure, reason="ci_status returned errors on 3 consecutive snapshots", artifacts=[snapshot.error])
-            release lock; exit
+            exit
         # Adapter flake: short wait and retry the snapshot via a background-
         # notified Bash sleep so the agent isn't blocked. Bounded by
         # consecutive_adapter_errors (at most 3 of these before block-and-comment).
@@ -46,7 +45,7 @@ while True:
         emit ci_green (detail: {})
         set state.current_stage = "pr-reviewing"
         update state.updated_at = <now>
-        release lock; exit
+        exit
 
     if snapshot.status == "failure":
         result = snapshot  # already terminal; reuse the snapshot
@@ -60,24 +59,24 @@ while True:
             consecutive_adapter_errors += 1
             if consecutive_adapter_errors >= 3:
                 block-and-comment(tech-failure, reason="ci_watch returned errors on 3 consecutive attempts", artifacts=[result.error])
-                release lock; exit
+                exit
             continue
 
     if result.status == "timeout":
         block-and-comment(tech-failure, reason="ci_watch exceeded 120 minutes (2 hours) without a terminal verdict")
-        release lock; exit
+        exit
 
     if result.status == "success":
         emit ci_green (detail: {})
         set state.current_stage = "pr-reviewing"
         update state.updated_at = <now>
-        release lock; exit
+        exit
 
     if result.status == "failure":
         emit ci_failed (detail: {runs: <result.runs>})
         if (state.retries["ci-watching"] or 0) >= config.retry_budgets.ci (default 2):
             block-and-comment(tech-failure, reason="CI failed <N> times", artifacts=[result.failed_logs])
-            release lock; exit
+            exit
         dispatch_fix_sub_agent(failed_logs=result.failed_logs)
         emit ci_fix_attempted (detail: {attempt: <N+1>, files_changed: <count>})
         state.retries["ci-watching"] = (state.retries["ci-watching"] or 0) + 1
@@ -139,7 +138,7 @@ After sub-agent reports `BLOCKED` or `NEEDS_CONTEXT`:
 - On `ci_green`: `state.current_stage = "pr-reviewing"`.
 - No `state.terminal` or `state.blocked_reason` writes here — those happen via `block-and-comment` on exhaustion.
 
-Each write is a read-modify-write of `.bugfix/runs/<ticket-id>.json`. Holding the file mutable across the entire loop would let two concurrent writers from different runs (shouldn't happen given the lock, but defensive) collide.
+Each write is a read-modify-write of `.bugfix/runs/<ticket-id>.json`. The single-session driver runs one stage at a time per ticket, so concurrent writers are not expected; the read-modify-write discipline is still good practice for survivability across crashes.
 
 ## Events
 
@@ -161,25 +160,19 @@ No `ci_pending` event — pending is the default state and would not surface a n
 | `ticket-adapter:ci_status` or `ci_watch` returns `{error: ...}` repeatedly | `tech-failure` | After 3 adapter errors in a row, fail rather than infinite-loop |
 | `ticket-adapter:push` returns error after a fix-sub-agent commit | (handled as fix-attempt failure, no block) | Increment retry counter; continue the watch loop |
 
-After block-and-comment, do NOT advance `current_stage`. Release the lock and exit.
+After block-and-comment, do NOT advance `current_stage`. Exit.
 
 ## Next stage
 
-On `ci_green`: write `state.current_stage = "pr-reviewing"`, release the lock, exit. `resume-run` then dispatches `bugfix:pr-final-review`.
+On `ci_green`: write `state.current_stage = "pr-reviewing"`, exit. `bugfix:run-ticket` then dispatches `bugfix:pr-final-review`.
 
 ## Alternative: schedule-and-resume
 
-For hosts that can't afford long-held sessions (`ci_watch` ties up the worktree until terminal verdict or 120-minute timeout), an alternative is to:
-
-1. On the first `pending` snapshot: write `state.next_poll_at = <now + interval>` to state, release the lock, exit.
-2. The host's scheduler invokes `bugfix:resume-run` again at or after `next_poll_at`.
-3. `resume-run` re-dispatches `ci-watchdog`, which reads `state.next_poll_at`, takes a fresh snapshot, and either advances or blocks again.
-
-This mode requires (a) `next_poll_at` field in the run-state schema (not in v1) and (b) host-side scheduling. v1 ships the `ci_watch` long-poll as the only mode; the schedule-and-resume hooks are forward-compatibility documentation, not a runtime option.
+The single-session driver runs `ci_watch` synchronously until terminal verdict or 120-minute timeout. A future enhancement could let the driver release the ticket between snapshots (writing `state.next_poll_at` and exiting), with an external scheduler re-invoking `bugfix:run-ticket` later — but the current single-session model holds the watcher open for the full duration. The `state.next_poll_at` field is not in v1.
 
 ## STAGE COMPLETE — STOP HERE
 
-Your work as the `ci-watchdog` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+Your work as the `ci-watchdog` stage is done. You MUST stop here. Your next action MUST be to return control to `bugfix:run-ticket`'s driver loop. Do NOT:
 - Start the next stage's work inline.
 - Read files relevant to the next stage.
 - Implement / test / push / open PRs beyond this stage's documented operations.

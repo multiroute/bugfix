@@ -22,7 +22,7 @@ At the top of every operation, check `state.artifacts.adapter_backend`:
    - **MCP first.** Look in your available toolset for `mcp__github__get_issue` (or any `mcp__github__*` tool — the canonical GitHub MCP server exposes them under this prefix). If found, set backend = `"mcp"`.
    - **gh fallback.** Run `command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1` and verify `gh --version` reports `>= 2.40` (needed for `--watch --fail-fast`). If all three pass, set backend = `"gh"`.
    - **Neither.** Return `{"error": "neither MCP GitHub nor gh CLI available — install one and retry"}`. The caller (a stage skill) decides whether to retry or escalate via `bugfix:block-and-comment(tech-failure)`.
-3. Write the chosen backend to `state.artifacts.adapter_backend` under the per-ticket lock. Subsequent operations within the same run read this cache. The cache lives for the lifetime of one run — a new run (fresh `state.json`, or one that has reached a `terminal` state) re-probes from scratch, so mid-run installs of MCP or gh do not affect in-flight runs but are picked up on the next run.
+3. Write the chosen backend to `state.artifacts.adapter_backend`. Subsequent operations within the same run read this cache. The cache lives for the lifetime of one run — a new run (fresh `state.json`, or one that has reached a `terminal` state) re-probes from scratch, so mid-run installs of MCP or gh do not affect in-flight runs but are picked up on the next run.
 
 ### Per-op subsection convention
 
@@ -105,7 +105,7 @@ A ticket comment is a bot comment if **any** of these is true:
 2. `comment.authorAssociation == "BOT"` (case-sensitive — GitHub returns this enum in upper-case; do NOT normalize to lower before comparing).
 3. The comment's author login appears in `config.bot_author_allowlist` (an optional array of additional service-account logins like `our-ci-runner` that a host has explicitly marked as bot-equivalent). If `config.bot_author_allowlist` is absent or empty, only rules 1 and 2 apply.
 
-The `read()` operation surfaces a derived `is_bot` boolean per comment using all three rules. `resume-run` uses `is_bot` to filter out self-resumes and service-account chatter when scanning for human "resume" comments.
+The `read()` operation surfaces a derived `is_bot` boolean per comment using all three rules. `run-ticket`'s resume-from-blocked detection uses `is_bot` to filter out self-resumes and service-account chatter when scanning for human "resume" comments.
 
 **Resume token (case-insensitive):** a comment's body counts as a resume signal only if its first non-whitespace, non-tag-wrapper token matches `^resume$` (i.e., `resume` is the entire first word). Substring matches like "don't resume yet" or "I'll resume tomorrow" MUST NOT trigger. The recommended check:
 

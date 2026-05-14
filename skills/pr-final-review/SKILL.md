@@ -1,6 +1,6 @@
 ---
 name: pr-final-review
-description: Use as the terminal stage of the autonomous bug-fix loop. Rebases the PR on top of base_branch, dispatches advocate + adversary reviewers in parallel, applies the decision rule, terminates the loop as merge-ready, pr-closed, or blocks for human resolution. Dispatched by `bugfix:resume-run` when `state.current_stage == "pr-reviewing"`.
+description: Use as the terminal stage of the autonomous bug-fix loop. Rebases the PR on top of base_branch, dispatches advocate + adversary reviewers in parallel, applies the decision rule, terminates the loop as merge-ready, pr-closed, or blocks for human resolution. Dispatched by `bugfix:run-ticket` when `state.current_stage == "pr-reviewing"`.
 ---
 
 # bugfix:pr-final-review
@@ -11,12 +11,11 @@ Terminal stage of the autonomous loop. Rebases the PR on `base_branch`, dispatch
 
 ## State-file-first context
 
-This skill is invoked by `bugfix:resume-run` when `state.current_stage == "pr-reviewing"`. Before doing any work:
+This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "pr-reviewing"`. Before doing any work:
 
 1. Read `.bugfix/runs/<ticket-id>.json`. Confirm `current_stage == "pr-reviewing"`. If not, exit with an error.
 2. Confirm `state.pr_number != null` and `state.base_branch != null` and `state.base_sha != null`. If any is null, exit via `bugfix:block-and-comment(tech-failure, reason="pr-final-review dispatched with missing state fields — upstream stage didn't initialize them")`.
-3. Acquire the lock via `bugfix/lib/lock-acquire.sh ".bugfix/runs/<ticket-id>.lock" "<session_id>" "pr-reviewing"`. If acquire fails, exit cleanly — resume-run will retry.
-4. cd into `state.worktree_path`. All git operations run inside the worktree.
+3. cd into `state.worktree_path`. All git operations run inside the worktree.
 
 ## Step 1: Rebase
 
@@ -141,7 +140,7 @@ Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins
    The loop completed successfully through CI watching and final review. Please review and merge manually.
    ```
 9. Emit `pr_merge_ready` event (detail: `{advocate: "yes/conditional", adversary: "clean/important"}`).
-10. Release lock; exit.
+10. Exit.
 
 ### Branch B: `pr-closed`
 
@@ -158,7 +157,6 @@ Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins
      - Call `ticket_comment` with its template (which references the adversary's critical findings).
      - Call `set_status(state.issue_number, "rejected")`.
      - Emit `block_and_comment` event.
-     - Release the lock.
 7. Exit.
 
 ### Branch C: `block` (any blocking decision-rule path)
@@ -167,7 +165,7 @@ Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins
 2. Set `state.updated_at = <now>`.
 3. Emit `pr_review_blocked` event (detail: `{reason: <short>, advocate: <verdict>, adversary: <verdict>}`).
 4. Invoke `bugfix:block-and-comment(needs-info, reason=<short>, questions=[<both verdicts, formatted>], artifacts=[{label: "advocate_verdict", path: "(inline)"}, {label: "adversary_verdict", path: "(inline)"}])`.
-   - `block-and-comment` handles the ticket comment, status set to `needs-info`, lock release.
+   - `block-and-comment` handles the ticket comment and status set to `needs-info`.
 5. Exit.
 
 ## Configuration knobs
@@ -217,11 +215,11 @@ Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <eve
 
 ## Next stage
 
-None. `pr-final-review` is the terminal stage. After this skill exits, `state.terminal` is set (or `state.blocked_reason` is set on a block). `bugfix:run-ticket`'s driver loop checks for either and exits cleanly.
+None. `pr-final-review` is the terminal stage. After this skill exits, `state.terminal` is set (or `state.blocked_reason` is set on a block). `bugfix:run-ticket`'s driver loop reads the state file on its next iteration, sees the terminal/blocked field, and exits cleanly.
 
 ## STAGE COMPLETE — STOP HERE
 
-Your work as the `pr-final-review` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+Your work as the `pr-final-review` stage is done. You MUST stop here. Your next action MUST be to return control to `bugfix:run-ticket`'s driver loop. Do NOT:
 - Start the next stage's work inline.
 - Read files relevant to the next stage.
 - Implement / test / push / open PRs beyond this stage's documented operations.

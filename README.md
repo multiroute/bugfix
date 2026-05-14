@@ -69,7 +69,7 @@ In a fresh session:
 fix bug https://github.com/<owner>/<repo>/issues/<number>
 ```
 
-The agent invokes `bugfix:run-ticket`, parses the URL, initializes `.bugfix/runs/<ticket-id>.json`, acquires the per-ticket lock, and loops the stage skills to a terminal verdict on the PR. Identical behavior with `fix issue <url>` and `resolve issue <url>`.
+The agent invokes `bugfix:run-ticket`, parses the URL, initializes `.bugfix/runs/<ticket-id>.json`, and loops the stage skills to a terminal verdict on the PR. Identical behavior with `fix issue <url>` and `resolve issue <url>`.
 
 The loop also handles improvement tickets (refactors, cleanups, new behavior requests) — not just defects. The ticket-intake stage classifies the ticket; bugs and improvements both run through planning → executing → finishing → CI → review, with the only difference being that improvements relax the failing-test-first rule (since there's no defect to reproduce). Tickets that are too vague to act on still reject at intake with a `bugfix-status:rejected` comment.
 
@@ -81,7 +81,7 @@ When the loop pauses for human input (an intake classification couldn't decide, 
 
 1. Read the bot's comment and provide whatever was requested (clarification, decision, manual fix).
 2. Add a new comment on the issue containing the single word `resume` as its first non-whitespace token. (Substring matches like "don't resume" or "resume tomorrow" do NOT trigger resumption — `resume` must be the leading token.)
-3. Re-invoke `fix bug <url>` (or call `bugfix:resume-run` directly). The driver detects the resume signal, clears `blocked_reason` under the lock, and continues from the stored stage.
+3. Re-invoke `fix bug <url>`. The driver detects the `resume` signal in the ticket comments, clears `blocked_reason`, and continues from the stored stage.
 
 Bot-authored comments are filtered out, so the loop's own template (which contains the word "resume" in its instructions) won't self-trigger.
 
@@ -105,10 +105,7 @@ Optional plugin-wide config lives at `.bugfix/runs/config.json` (per-project, no
     "advocate_must_run_regression_test": true
   },
   "model_hints": {
-    "stages": {
-      "intake": "haiku",
-      "ci-watching": "haiku"
-    }
+    "implementer": "opus"
   },
   "bot_author_allowlist": ["our-ci-runner", "release-bot"]
 }
@@ -116,7 +113,7 @@ Optional plugin-wide config lives at `.bugfix/runs/config.json` (per-project, no
 
 `bot_author_allowlist` extends the built-in `[bot]`-suffix and `authorAssociation=="BOT"` detection — list any service-account logins whose comments should NOT trigger resume signals.
 
-`model_hints.stages.<stage>` is a host-agnostic hint at the model class (`haiku` / `sonnet` / `opus`) the host should spawn for each stage when driving the loop via `bugfix:resume-run` from external scheduling. Defaults: `intake` and `ci-watching` are Haiku-class (mechanical work); other stages inherit the host's session model. In-session drivers (`bugfix:run-ticket`) inherit the session model and ignore these hints — they exist for split-session hosts that can be cost-aware. The fix sub-agent dispatched by ci-watchdog on CI failure is NOT Haiku — it gets routed via `model_hints.implementer` since it does real implementation work.
+`model_hints.implementer` selects the model class (`haiku` / `sonnet` / `opus`) the host should spawn for sub-agents that do real implementation work — the per-task implementers dispatched by `executing-plan` and the CI fix sub-agent dispatched by `ci-watchdog`. The single-session driver itself inherits the session model.
 
 ## Runtime tree (`.bugfix/`)
 
@@ -127,8 +124,7 @@ All operational data for bug-fix runs lives under `.bugfix/` at the repo root. *
 ├── runs/
 │   ├── config.json               # plugin-wide knobs (per project)
 │   ├── <ticket-id>.json          # run state
-│   ├── <ticket-id>.events.log    # append-only JSONL audit trail
-│   └── <ticket-id>.lock          # present only while a stage is actively executing
+│   └── <ticket-id>.events.log    # append-only JSONL audit trail
 ├── specs/
 │   └── <ticket-id>.md            # bug spec written by ticket-intake (NOT committed)
 └── plans/
@@ -143,13 +139,12 @@ echo ".bugfix/" >> .gitignore
 
 (Feature specs and plans — written outside the bug-fix loop — still go to `docs/superpowers/{specs,plans}/` and are committed normally. The split is intentional: bug-fix runs are operational, ephemeral, per-ticket; feature work is design artifacts kept in the source tree.)
 
-State and events files are schema-validated by `bugfix/schemas/{run-state,events,config,lock}.schema.json`.
+State and events files are schema-validated by `bugfix/schemas/{run-state,events,config}.schema.json`.
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
-| `lock held by pid=N, refusing` | A previous run is still active OR crashed with a stale lock. Verify the pid isn't live (`ps -p N`); if dead, delete `.bugfix/runs/<ticket-id>.lock` and re-invoke. |
 | `gh CLI missing or not authenticated` | Install `gh` and run `gh auth login`. The adapter preflight requires both. |
 | Loop reaches `merge-ready` but doesn't merge | By design — humans merge manually. Look for the bot's `merge-ready` comment on the PR. |
 | Adversary always finds critical issues that auto-close the PR | Set `pr_review.adversary_enabled: false` in `.bugfix/runs/config.json` to kill-switch the adversary while you tune the prompt. |

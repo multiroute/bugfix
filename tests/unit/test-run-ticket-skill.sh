@@ -42,9 +42,35 @@ grep -qF "current_stage" "$SKILL" || { echo "FAIL body missing current_stage ini
 grep -qF '"intake"' "$SKILL" || { echo "FAIL body missing initial stage='intake'"; exit 1; }
 echo "OK  state initialization documented"
 
-# Body must reference resume-run loop.
-grep -qF "resume-run" "$SKILL" || { echo "FAIL body missing resume-run reference"; exit 1; }
-echo "OK  resume-run loop referenced"
+# Body must contain the inlined stage-to-skill dispatch table (resume-run was folded in).
+grep -qF "## Stage-to-skill mapping" "$SKILL" || { echo "FAIL body missing stage-to-skill mapping header"; exit 1; }
+for stage in intake planning executing finishing ci-watching pr-reviewing; do
+  grep -qF "\`$stage\`" "$SKILL" || { echo "FAIL stage mapping missing: $stage"; exit 1; }
+done
+echo "OK  stage-to-skill mapping inlined with all 6 stages"
+
+# Body must contain resume-from-blocked detection (moved from resume-run).
+grep -qF "## Resume-from-blocked detection" "$SKILL" || { echo "FAIL body missing resume-from-blocked section"; exit 1; }
+grep -qF "is_bot" "$SKILL" || { echo "FAIL body missing bot-filter rule for resume detection"; exit 1; }
+echo "OK  resume-from-blocked detection inlined"
+
+# Body must contain stage-not-implemented terminal handling (moved from resume-run).
+grep -qF "stage-not-implemented" "$SKILL" || { echo "FAIL body missing stage-not-implemented terminal handling"; exit 1; }
+echo "OK  stage-not-implemented handling inlined"
+
+# Body must NOT reference the deleted resume-run skill or its old indirection.
+if grep -qF "bugfix:resume-run" "$SKILL"; then
+  echo "FAIL body still references deleted bugfix:resume-run"
+  exit 1
+fi
+echo "OK  no references to deleted bugfix:resume-run"
+
+# Body must NOT reference lock infrastructure.
+if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
+  echo "FAIL body still references lock infrastructure"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
 
 # Body must reference terminal-state exit.
 grep -qiF "terminal" "$SKILL" || { echo "FAIL body missing terminal-state exit reference"; exit 1; }

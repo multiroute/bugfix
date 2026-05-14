@@ -1,6 +1,6 @@
 ---
 name: autonomous-finishing
-description: Use as the post-execution stage of the autonomous bug-fix loop. Verifies local tests pass, pushes the branch, opens a PR via `bugfix:ticket-adapter`, comments the ticket with the PR link, and advances state to ci-watching. Dispatched by `bugfix:resume-run` when `state.current_stage == "finishing"`.
+description: Use as the post-execution stage of the autonomous bug-fix loop. Verifies local tests pass, pushes the branch, opens a PR via `bugfix:ticket-adapter`, comments the ticket with the PR link, and advances state to ci-watching. Dispatched by `bugfix:run-ticket` when `state.current_stage == "finishing"`.
 ---
 
 # bugfix:autonomous-finishing
@@ -9,11 +9,10 @@ The post-execution stage: turn committed work into a public PR with a ticket com
 
 ## State-file-first context
 
-This skill is invoked by `bugfix:resume-run` when `state.current_stage == "finishing"`. Before doing any work:
+This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "finishing"`. Before doing any work:
 
 1. Read `.bugfix/runs/<ticket-id>.json`. Confirm `current_stage == "finishing"`. If not, exit with an error.
-2. Acquire the lock via `bugfix/lib/lock-acquire.sh ".bugfix/runs/<ticket-id>.lock" "<session_id>" "finishing"`.
-3. cd into `state.worktree_path`. All operations from here run inside the worktree.
+2. cd into `state.worktree_path`. All operations from here run inside the worktree.
 
 ## Local test verification
 
@@ -118,11 +117,11 @@ Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <eve
 
 ## Next stage
 
-On success: write `state.current_stage = "ci-watching"`, release the lock, exit. `resume-run` dispatches `bugfix:ci-watchdog`, which long-polls CI on the new PR via `ticket-adapter:ci_watch` and either advances to `pr-reviewing` on green, fixes failures (bounded retries), or blocks on timeout.
+On success: write `state.current_stage = "ci-watching"`, exit. `bugfix:run-ticket` dispatches `bugfix:ci-watchdog`, which long-polls CI on the new PR via `ticket-adapter:ci_watch` and either advances to `pr-reviewing` on green, fixes failures (bounded retries), or blocks on timeout.
 
 ## STAGE COMPLETE — STOP HERE
 
-Your work as the `autonomous-finishing` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+Your work as the `autonomous-finishing` stage is done. You MUST stop here. Your next action MUST be to return control to `bugfix:run-ticket`'s driver loop. Do NOT:
 - Start the next stage's work inline.
 - Read files relevant to the next stage.
 - Implement / test / push / open PRs beyond this stage's documented operations.

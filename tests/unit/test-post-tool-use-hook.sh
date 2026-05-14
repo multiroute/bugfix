@@ -6,21 +6,16 @@ HOOK="$PLUGIN_ROOT/hooks/post-tool-use-stage-handoff"
 [[ -x "$HOOK" ]] || { echo "FAIL hook not executable at $HOOK"; exit 1; }
 echo "OK  hook present and executable"
 
-# 1. Skill invocation of a stage skill -> emit systemMessage
+# 1. Skill invocation of a stage skill -> emit systemMessage pointing at run-ticket
 out="$(printf '%s' '{"tool_name":"Skill","tool_input":{"skill":"bugfix:ticket-intake"}}' | "$HOOK")"
 echo "$out" | jq -e '.systemMessage' >/dev/null || { echo "FAIL no systemMessage for ticket-intake"; echo "$out"; exit 1; }
-echo "$out" | jq -r '.systemMessage' | grep -q "resume-run" || { echo "FAIL systemMessage missing resume-run text"; exit 1; }
+echo "$out" | jq -r '.systemMessage' | grep -q "run-ticket" || { echo "FAIL systemMessage missing run-ticket text"; exit 1; }
 echo "OK  stage skill triggers reminder"
 
-# 2. Skill invocation of run-ticket -> emit systemMessage
+# 2. Skill invocation of run-ticket -> NO reminder (run-ticket IS the driver loop)
 out="$(printf '%s' '{"tool_name":"Skill","tool_input":{"skill":"bugfix:run-ticket"}}' | "$HOOK")"
-echo "$out" | jq -e '.systemMessage' >/dev/null || { echo "FAIL no systemMessage for run-ticket"; exit 1; }
-echo "OK  run-ticket triggers reminder"
-
-# 3. Skill invocation of resume-run -> NO reminder (resume-run is the dispatcher)
-out="$(printf '%s' '{"tool_name":"Skill","tool_input":{"skill":"bugfix:resume-run"}}' | "$HOOK")"
-[[ -z "$out" ]] || { echo "FAIL resume-run triggered a reminder (should be silent)"; echo "$out"; exit 1; }
-echo "OK  resume-run is silent"
+[[ -z "$out" ]] || { echo "FAIL run-ticket triggered a reminder (should be silent — it IS the loop)"; echo "$out"; exit 1; }
+echo "OK  run-ticket is silent"
 
 # 4. Non-bugfix skill -> silent
 out="$(printf '%s' '{"tool_name":"Skill","tool_input":{"skill":"superpowers:brainstorming"}}' | "$HOOK")"

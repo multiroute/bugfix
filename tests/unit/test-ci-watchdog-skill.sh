@@ -71,14 +71,20 @@ echo "OK  state writes documented"
 grep -qF "block-and-comment" "$SKILL" || { echo "FAIL block-and-comment exit missing"; exit 1; }
 echo "OK  block-and-comment exits documented"
 
-# ci-watchdog controller is mechanical enough for Haiku, but the fix sub-agent
-# it dispatches is NOT Haiku — it does real implementation work. Both must be
-# documented so a host that splits sessions per stage routes correctly.
+# ci-watchdog controller is mechanical enough for Haiku (informal recommendation
+# for cost-tuning when the single-session driver runs); the fix sub-agent it
+# dispatches is NOT Haiku — it does real implementation work.
 grep -qiF "Recommended model: Haiku" "$SKILL" || { echo "FAIL ci-watchdog must recommend Haiku class for the controller"; exit 1; }
-grep -qF "config.model_hints.stages.ci-watching" "$SKILL" || { echo "FAIL ci-watchdog must reference the stage model-hint config key"; exit 1; }
 grep -qiE "fix sub-agent.*implementer|implementer.*fix sub-agent" "$SKILL" \
   || { echo "FAIL ci-watchdog must clarify that the fix sub-agent runs at implementer tier (NOT haiku)"; exit 1; }
 echo "OK  Haiku recommendation for controller + implementer tier for fix sub-agent documented"
+
+# Lock infrastructure was removed.
+if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
+  echo "FAIL ci-watchdog still references lock infrastructure"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
 
 # STAGE COMPLETE footer must be present and contain the STOP HERE directive.
 grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \

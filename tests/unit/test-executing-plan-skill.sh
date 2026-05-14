@@ -82,6 +82,13 @@ if grep -qE "Increment [0-9]+" "$SKILL"; then
 fi
 echo "OK  no stale Increment N references"
 
+# Lock infrastructure was removed (single-session driver — no concurrency races).
+if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
+  echo "FAIL executing-plan still references lock infrastructure"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
+
 # STAGE COMPLETE footer must be present and contain the STOP HERE directive.
 grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
   || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }

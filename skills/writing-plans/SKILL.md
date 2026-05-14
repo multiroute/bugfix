@@ -5,12 +5,11 @@ description: Use when you have a spec or requirements for a multi-step task, bef
 
 ## State-file-first context
 
-This skill is invoked by `bugfix:resume-run` when `state.current_stage == "planning"`. Before producing any plan:
+This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "planning"`. Before producing any plan:
 
-1. Read `.bugfix/runs/<ticket-id>.json` and confirm `current_stage == "planning"`. If not, exit with an error (resume-run should not have dispatched).
+1. Read `.bugfix/runs/<ticket-id>.json` and confirm `current_stage == "planning"`. If not, exit with an error (the driver should not have dispatched).
 2. Read the spec at `state.spec_path` — that's the input.
-3. Acquire the lock via `bugfix/lib/lock-acquire.sh ".bugfix/runs/<ticket-id>.lock" "<session_id>" "planning"`. **Lock first, side-effects second** — every state-mutating step below MUST run inside the locked region so a concurrent `resume-run` invocation on the same ticket cannot race past the `current_stage == "planning"` gate. If lock acquire fails, exit cleanly — resume-run will retry.
-4. **Detect whether cwd is already in an isolated worktree.** Run:
+3. **Detect whether cwd is already in an isolated worktree.** Run:
 
    ```bash
    git_dir="$(git rev-parse --git-dir 2>/dev/null || echo "")"
@@ -30,8 +29,8 @@ This skill is invoked by `bugfix:resume-run` when `state.current_stage == "plann
      - Emit `worktree_reused` event (detail: `{"path": "<state.worktree_path>", "branch": "<state.branch>"}`).
    - **If `in_worktree=false`:** inline-invoke `bugfix:using-git-worktrees` to create `.worktrees/<ticket-id>` from `state.base_branch`, verify clean test baseline. Record `state.worktree_path`, `state.branch`, and `state.base_sha`. Emit `worktree_created` event.
 
-5. Continue with planning (per the body below). **Save the plan to `.bugfix/plans/<ticket-id>.md`** — the bugfix runtime keeps operational data under `.bugfix/`, NOT under `docs/superpowers/plans/` (that path is for upstream feature workflows). The upstream "Save plans to:" guidance later in this skill body is overridden by this rule for bug-fix runs.
-6. After plan review passes (see "Mandatory plan review" section below), set `state.plan_path = ".bugfix/plans/<ticket-id>.md"` and `state.current_stage = "executing"`, emit `plan_reviewed` event, release the lock, exit.
+4. Continue with planning (per the body below). **Save the plan to `.bugfix/plans/<ticket-id>.md`** — the bugfix runtime keeps operational data under `.bugfix/`, NOT under `docs/superpowers/plans/` (that path is for upstream feature workflows). The upstream "Save plans to:" guidance later in this skill body is overridden by this rule for bug-fix runs.
+5. After plan review passes (see "Mandatory plan review" section below), set `state.plan_path = ".bugfix/plans/<ticket-id>.md"` and `state.current_stage = "executing"`, emit `plan_reviewed` event, exit.
 
 If anything fails before the plan is reviewed, exit via `bugfix:block-and-comment` with the appropriate `exit_kind` (`needs-info` for spec ambiguity, `tech-failure` for tooling errors).
 
@@ -139,7 +138,7 @@ In all cases, the improvement plan SHOULD produce test coverage for any new beha
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: In the bugfix autonomous loop, this header's REQUIRED SUB-SKILL note is informational only — the loop's `bugfix:resume-run` dispatches `bugfix:executing-plan` automatically to consume this plan. For manual plan execution outside the loop, use `bugfix:executing-plan` directly. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: In the bugfix autonomous loop, this header's REQUIRED SUB-SKILL note is informational only — the loop's `bugfix:run-ticket` driver dispatches `bugfix:executing-plan` automatically to consume this plan. For manual plan execution outside the loop, use `bugfix:executing-plan` directly. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -226,12 +225,11 @@ After "Plan compliant":
 - Set `state.plan_path = ".bugfix/plans/<ticket-id>.md"`.
 - Emit `plan_reviewed` event via `bugfix/lib/events-append.sh`.
 - Set `state.current_stage = "executing"`.
-- Release the lock.
 - Exit.
 
 ## State writes
 
-Inside the locked region:
+Inside the planning stage:
 
 - `state.worktree_path = ".worktrees/<ticket-id>"` (after worktree creation).
 - `state.branch = "<branch name created by using-git-worktrees>"`.
@@ -263,11 +261,11 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 
 ## Execution Handoff
 
-In the bugfix autonomous loop this skill does NOT ask the user which execution mode to use — `bugfix:resume-run` always dispatches `bugfix:executing-plan` after the plan is reviewed and `current_stage` advances to `executing`. Do NOT pause to offer "Subagent-Driven vs Inline Execution" choices; those upstream options are not exposed in the autonomous loop. The autonomous flow continues automatically via the loop's state-file-first dispatch.
+In the bugfix autonomous loop this skill does NOT ask the user which execution mode to use — `bugfix:run-ticket` always dispatches `bugfix:executing-plan` after the plan is reviewed and `current_stage` advances to `executing`. Do NOT pause to offer "Subagent-Driven vs Inline Execution" choices; those upstream options are not exposed in the autonomous loop. The autonomous flow continues automatically via the loop's state-file-first dispatch.
 
 ## STAGE COMPLETE — STOP HERE
 
-Your work as the `writing-plans` stage is done. You MUST stop here. Your next action MUST be to return control. Do NOT:
+Your work as the `writing-plans` stage is done. You MUST stop here. Your next action MUST be to return control to `bugfix:run-ticket`'s driver loop. Do NOT:
 - Start the next stage's work inline.
 - Read files relevant to the next stage.
 - Implement / test / push / open PRs beyond this stage's documented operations.

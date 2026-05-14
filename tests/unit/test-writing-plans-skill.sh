@@ -60,9 +60,12 @@ grep -qF "Task 1 MUST be a failing regression test" "$SKILL" \
   || { echo "FAIL writing-plans bug-class section missing mandatory regression-test rule"; exit 1; }
 echo "OK  Task 1 explicit regression-test file declaration required (marker + prose pinned)"
 
-# C6: lock acquisition must precede side-effects.
-grep -qiF "Lock first, side-effects second" "$SKILL" || { echo "FAIL writing-plans must enforce lock-first-side-effects-second ordering"; exit 1; }
-echo "OK  lock-first-side-effects-second ordering documented"
+# Lock infrastructure was removed (single-session driver — no concurrency races).
+if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
+  echo "FAIL writing-plans still references lock infrastructure"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
 
 # C6: must not pause to ask user about execution mode in autonomous loop.
 if grep -qiE "Which approach\?|Subagent-Driven \(recommended\)" "$SKILL"; then
