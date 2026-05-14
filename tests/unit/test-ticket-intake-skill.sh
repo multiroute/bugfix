@@ -46,10 +46,16 @@ echo "OK  advances to planning stage"
 grep -qF "spec_path" "$SKILL" || { echo "FAIL missing spec_path state write"; exit 1; }
 echo "OK  spec_path state write documented"
 
-# Stage is mechanical enough for Haiku — recommendation must be documented
-# so external schedulers can route via config.model_hints.stages.intake.
+# Stage is mechanical enough for Haiku — informal recommendation stays as guidance
+# for the single-session driver to consider its costs.
 grep -qiF "Recommended model: Haiku" "$SKILL" || { echo "FAIL ticket-intake must recommend Haiku class"; exit 1; }
-grep -qF "config.model_hints.stages.intake" "$SKILL" || { echo "FAIL ticket-intake must reference the stage model-hint config key"; exit 1; }
-echo "OK  Haiku recommendation + model-hint config key documented"
+echo "OK  Haiku recommendation documented"
+
+# Lock infrastructure was removed (single-session driver — no concurrency races).
+if grep -qiE "lock-acquire|lock-release|\.lock" "$SKILL"; then
+  echo "FAIL ticket-intake still references lock infrastructure after locks were removed"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
 
 echo "PASS"
