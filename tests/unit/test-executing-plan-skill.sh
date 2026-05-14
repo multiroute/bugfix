@@ -82,4 +82,11 @@ if grep -qE "Increment [0-9]+" "$SKILL"; then
 fi
 echo "OK  no stale Increment N references"
 
+# Lock infrastructure was removed (single-session driver — no concurrency races).
+if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
+  echo "FAIL executing-plan still references lock infrastructure"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
+
 echo "PASS"
