@@ -5,7 +5,7 @@ description: Use when you have a spec or requirements for a multi-step task, bef
 
 ## State-file-first context
 
-This skill is invoked by `bugfix:resume-run` when `state.current_stage == "planning"`. Before producing any plan:
+This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "planning"`. Before producing any plan:
 
 1. Read `.bugfix/runs/<ticket-id>.json` and confirm `current_stage == "planning"`. If not, exit with an error (the driver should not have dispatched).
 2. Read the spec at `state.spec_path` — that's the input.
@@ -105,7 +105,7 @@ Downstream stages (`bugfix:executing-plan`, `bugfix:ci-watchdog`, `bugfix:pr-fin
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: In the bugfix autonomous loop, this header's REQUIRED SUB-SKILL note is informational only — the loop's `bugfix:resume-run` dispatches `bugfix:executing-plan` automatically to consume this plan. For manual plan execution outside the loop, use `bugfix:executing-plan` directly. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: In the bugfix autonomous loop, this header's REQUIRED SUB-SKILL note is informational only — the loop's `bugfix:run-ticket` driver dispatches `bugfix:executing-plan` automatically to consume this plan. For manual plan execution outside the loop, use `bugfix:executing-plan` directly. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -228,4 +228,4 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 
 ## Execution Handoff
 
-In the bugfix autonomous loop this skill does NOT ask the user which execution mode to use — `bugfix:resume-run` always dispatches `bugfix:executing-plan` after the plan is reviewed and `current_stage` advances to `executing`. Do NOT pause to offer "Subagent-Driven vs Inline Execution" choices; those upstream options are not exposed in the autonomous loop. The autonomous flow continues automatically via the loop's state-file-first dispatch.
+In the bugfix autonomous loop this skill does NOT ask the user which execution mode to use — `bugfix:run-ticket` always dispatches `bugfix:executing-plan` after the plan is reviewed and `current_stage` advances to `executing`. Do NOT pause to offer "Subagent-Driven vs Inline Execution" choices; those upstream options are not exposed in the autonomous loop. The autonomous flow continues automatically via the loop's state-file-first dispatch.

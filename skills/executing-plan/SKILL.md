@@ -5,7 +5,7 @@ description: Use when executing implementation plans with independent tasks in t
 
 ## State-file-first context
 
-This skill is invoked by `bugfix:resume-run` when `state.current_stage == "executing"`. Before doing any work:
+This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "executing"`. Before doing any work:
 
 1. Read `.bugfix/runs/<ticket-id>.json` and confirm `current_stage == "executing"`. If not, exit with an error.
 2. cd into the worktree at `state.worktree_path` (created by `writing-plans` in the prior stage).
@@ -319,7 +319,7 @@ Done!
 - **bugfix:test-driven-development** - Subagents follow TDD for each task
 
 **Alternative workflow:**
-- (note: bugfix does NOT ship a separate executing-plans plural variant — the loop's `bugfix:resume-run` dispatches this skill for in-session execution, and fresh-session-per-stage execution uses `bugfix:resume-run` directly)
+- (note: bugfix does NOT ship a separate executing-plans plural variant — the loop's `bugfix:run-ticket` driver dispatches this skill directly)
 
 ## State writes after Task 1 (regression test)
 
