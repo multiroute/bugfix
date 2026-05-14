@@ -60,4 +60,16 @@ echo "OK  run-ticket no longer marked as Increment 1 stub"
 
 echo "OK  run-ticket is not falsely marked unimplemented"
 
+grep -qF "## Loop discipline" "$SKILL" \
+  || { echo "FAIL using-bugfix missing 'Loop discipline' section"; exit 1; }
+echo "OK  Loop discipline section present"
+
+grep -qF "exactly one dispatcher" "$SKILL" \
+  || { echo "FAIL using-bugfix Loop discipline section must say 'exactly one dispatcher'"; exit 1; }
+echo "OK  Loop discipline pins 'exactly one dispatcher'"
+
+grep -qF "violates the loop contract" "$SKILL" \
+  || { echo "FAIL using-bugfix Loop discipline section must include 'violates the loop contract' directive"; exit 1; }
+echo "OK  Loop discipline includes 'violates the loop contract'"
+
 echo "PASS"

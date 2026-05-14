@@ -58,4 +58,40 @@ if grep -qiE "lock-acquire|lock-release|\.lock" "$SKILL"; then
 fi
 echo "OK  no lock-infrastructure references"
 
+# Improvement classification must route to spec writing, not block-and-comment.
+grep -qF "classification == \"improvement\"" "$SKILL" \
+  || { echo "FAIL intake must reference improvement classification"; exit 1; }
+echo "OK  intake handles improvement classification"
+
+# Improvement spec template must be documented.
+grep -qF "## Desired outcome" "$SKILL" \
+  || { echo "FAIL intake missing improvement-spec template '## Desired outcome' section"; exit 1; }
+echo "OK  improvement spec template documented"
+
+grep -qF "## Rationale" "$SKILL" \
+  || { echo "FAIL intake missing improvement-spec template '## Rationale' section"; exit 1; }
+echo "OK  improvement Rationale section documented"
+
+# Classification line must appear in both templates.
+grep -qF "**Classification:**" "$SKILL" \
+  || { echo "FAIL intake spec templates must include Classification frontmatter line"; exit 1; }
+echo "OK  Classification line documented"
+
+# Block-and-comment table must no longer say improvement -> rejected.
+block_table_section="$(awk '/^## Block-and-comment exits$/,/^## /' "$SKILL")"
+if echo "$block_table_section" | grep -iF "classification = \`improvement\`" >/dev/null; then
+  echo "FAIL block-and-comment table still mentions improvement classification"
+  exit 1
+fi
+echo "OK  block-and-comment table no longer routes improvements"
+
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
 echo "PASS"

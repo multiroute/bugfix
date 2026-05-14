@@ -89,6 +89,10 @@ echo "OK  body uses .bugfix/ runtime tree (no docs/superpowers/ refs)"
 grep -qF ".bugfix/runs/" "$SKILL" || { echo "FAIL body must reference .bugfix/runs/ state path"; exit 1; }
 echo "OK  body references .bugfix/runs/ state path"
 
+grep -qF "mkdir -p .bugfix/runs" "$SKILL" \
+  || { echo "FAIL run-ticket must create .bugfix/runs (not .runs) before state init"; exit 1; }
+echo "OK  run-ticket creates the correct .bugfix/runs parent directory"
+
 # Pin the EXACT description string so a future increment rewrite doesn't
 # silently break the user-facing trigger contract. The skill's own
 # Forward-compatibility note tells the next implementer: frontmatter
@@ -102,5 +106,13 @@ if [[ "$actual_description" != "$expected_description" ]]; then
   exit 1
 fi
 echo "OK  description string pinned exactly"
+
+grep -qiF "red flags during the driver loop" "$SKILL" \
+  || { echo "FAIL run-ticket missing 'Red flags during the driver loop' subsection"; exit 1; }
+echo "OK  Red flags subsection present"
+
+grep -qF "I already have the data" "$SKILL" \
+  || { echo "FAIL run-ticket Red flags table missing 'I already have the data' entry"; exit 1; }
+echo "OK  Red flags table references rationalization patterns"
 
 echo "PASS"

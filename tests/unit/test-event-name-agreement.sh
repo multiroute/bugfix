@@ -21,7 +21,7 @@ enum = set(schema["properties"]["event"]["enum"])
 stage_skills = [
     "ticket-intake", "writing-plans", "executing-plan",
     "autonomous-finishing", "ci-watchdog", "pr-final-review",
-    "block-and-comment", "resume-run", "run-ticket",
+    "block-and-comment", "run-ticket",
 ]
 
 # Strategy: scan skill bodies for explicit "emit X" or "events-append.sh ... X"

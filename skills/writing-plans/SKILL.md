@@ -24,12 +24,13 @@ This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "plann
    - **If `in_worktree=true`:** the operator (or a parent harness) already spawned the loop inside an isolated worktree. Do NOT create a sibling `.worktrees/<ticket-id>/`. Record the current location as the ticket's worktree:
      - `state.worktree_path = "$(pwd)"` (absolute).
      - `state.branch = "$(git symbolic-ref --short HEAD)"`.
+     - After capturing `state.branch`: if `state.branch == state.base_branch`, the pre-staged worktree is sitting on the base branch itself (e.g., the operator forgot to check out a feature branch before running `fix bug <url>`). Committing the regression test and fix into the base branch and then pushing would later cause `autonomous-finishing` to open a `main → main` PR, which `gh pr create` rejects only at the finishing stage — by which point planning and executing have already run. Refuse early: exit via `bugfix:block-and-comment(tech-failure, reason="pre-staged worktree is on base_branch (<base_branch>) — refusing to commit there. Check out a feature branch in the worktree before re-running.")`. Do NOT advance `state.current_stage`.
      - `state.base_sha = "$(git merge-base HEAD "origin/$state.base_branch" 2>/dev/null || git rev-parse HEAD)"` (commit we branched off; falls back to HEAD if no merge base exists, which would be unusual).
      - Verify the test baseline is clean (`git status --porcelain` empty). If dirty, exit via `bugfix:block-and-comment(tech-failure, reason="ticket worktree is not clean — cannot start planning with uncommitted changes")`.
      - Emit `worktree_reused` event (detail: `{"path": "<state.worktree_path>", "branch": "<state.branch>"}`).
-   - **If `in_worktree=false`:** inline-invoke `bugfix:using-git-worktrees` to create `.worktrees/<ticket-id>` from `state.base_branch`, verify clean test baseline. Record `state.worktree_path`, `state.branch`, and `state.base_sha`. Emit `worktree_created` event.
+   - **If `in_worktree=false`:** inline-invoke `bugfix:using-git-worktrees` to create `.worktrees/<ticket-id>` from `state.base_branch`, verify clean test baseline. Record `state.worktree_path` (absolute — resolve the created worktree's path with `$(pwd)` after cd-ing into it, to match the in-worktree branch's convention), `state.branch`, and `state.base_sha`. Emit `worktree_created` event.
 
-4. Continue with planning (per the body below). **Save the plan to `.bugfix/plans/<ticket-id>.md`** — the bugfix runtime keeps operational data under `.bugfix/`, NOT under `docs/superpowers/plans/` (that path is for upstream feature workflows). The upstream "Save plans to:" guidance later in this skill body is overridden by this rule for bug-fix runs.
+4. Continue with planning (per the body below). **Save the plan to `.bugfix/plans/<ticket-id>.md`** — the bugfix runtime keeps operational data under `.bugfix/`, NOT under `docs/superpowers/plans/` (that path is for upstream feature workflows). Ensure `.bugfix/plans/` exists before writing (`mkdir -p .bugfix/plans/`). The upstream "Save plans to:" guidance later in this skill body is overridden by this rule for bug-fix runs.
 5. After plan review passes (see "Mandatory plan review" section below), set `state.plan_path = ".bugfix/plans/<ticket-id>.md"` and `state.current_stage = "executing"`, emit `plan_reviewed` event, exit.
 
 If anything fails before the plan is reviewed, exit via `bugfix:block-and-comment` with the appropriate `exit_kind` (`needs-info` for spec ambiguity, `tech-failure` for tooling errors).
@@ -78,24 +79,57 @@ This structure informs the task decomposition. Each task should produce self-con
 - "Commit" - step
 
 
-## Bug-fix plans: regression test first
+## Plan content depends on classification
 
-For bug-fix plans (created in response to a ticket), Task 1 MUST be:
+Before writing tasks, read `state.artifacts.intake_classification` (set by `ticket-intake`). The Task 1 rule branches:
 
-1. Write a failing test that reproduces the ticket's reported symptom.
-2. Run the test and verify it fails for the expected reason (not a setup error).
+### When `intake_classification == "bug"`: regression test first
 
-This is the regression test that gates the whole ticket. Implementation comes only AFTER Task 1's test exists and fails for the right reason. If the bug cannot be reproduced as a test (e.g., a UI rendering race), the planner MUST exit via `bugfix:block-and-comment(needs-info, reason="could not produce a failing test that reproduces the symptom")` rather than fabricate Task 1.
+Task 1 MUST be a failing regression test that exercises the repro steps from the spec and transitions FAIL on the base branch to PASS once the fix is in. This is non-negotiable for bug plans — the regression test is the loop's strongest guard against fake fixes.
 
-**Task 1 MUST declare the regression-test file path explicitly** as the first content line under the `### Task 1: ...` heading:
+Example Task 1 shape (substitute the bug's actual repro):
 
-```markdown
 ### Task 1: Regression test for <one-line bug description>
 
-**Regression test file:** tests/path/to/regression_test.py
+**Regression test file:** `tests/<path>/test_<bug>.py`
+
+**Files:**
+- Test: `tests/<path>/test_<bug>.py`
+
+The leading `**Regression test file:** <path>` declaration above is **mandatory** for every bug-class Task 1. Downstream stages (`bugfix:executing-plan`, `bugfix:ci-watchdog`, `bugfix:pr-final-review`) parse this line to discover the canonical regression-test path — the diff heuristic was removed because it was fragile when Task 1 touched multiple files. If a bug-class plan omits this declaration, `bugfix:executing-plan` will exit via `bugfix:block-and-comment(tech-failure)`.
+
+- [ ] **Step 1: Write the failing regression test**
+
+```python
+def test_<bug_name>():
+    # Exact reproduction from spec's "Repro steps" section.
+    result = <call_that_currently_misbehaves>
+    assert result == <expected_from_spec>
 ```
 
-Downstream stages (`bugfix:executing-plan`, `bugfix:ci-watchdog`, `bugfix:pr-final-review`) read this declaration to know which test file is the gating regression test. Do NOT rely on a `git diff` heuristic — multi-file Task 1s (test + helper, test + fixture) make that fragile. If Task 1 modifies more than one file, the declaration names the **single canonical regression test** the downstream stages should run; the other files are supporting infrastructure.
+- [ ] **Step 2: Run test, verify FAIL with the bug's actual behavior**
+
+Run: `pytest tests/<path>/test_<bug>.py::test_<bug_name> -v`
+Expected FAIL output: <paste the actual error message the user would see>
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/<path>/test_<bug>.py
+git commit -m "test: add failing regression test for <bug>"
+```
+
+Subsequent tasks implement the fix and verify the test transitions to PASS.
+
+### When `intake_classification == "improvement"`: Task 1 by judgment
+
+Improvement plans do NOT have a defect to reproduce, so the mandatory failing-test-first rule is relaxed. Task 1 is whatever structurally makes sense for the change:
+
+- If the improvement adds new behavior, Task 1 SHOULD be a test for that behavior (which fails because the behavior doesn't exist yet — same TDD cycle).
+- If the improvement is a refactor or cleanup with no behavior change, Task 1 MAY be the refactoring step itself, with existing tests proving non-regression.
+- If the improvement is documentation or comment cleanup, Task 1 MAY be the change itself.
+
+In all cases, the improvement plan SHOULD produce test coverage for any new behavior added. Coverage adequacy is judged by the plan reviewer (second-stage review below) and the PR-final-review adversary, not by a fixed rule.
 
 
 ## Plan Document Header
@@ -198,7 +232,7 @@ After "Plan compliant":
 
 Inside the planning stage:
 
-- `state.worktree_path = ".worktrees/<ticket-id>"` (after worktree creation).
+- `state.worktree_path = "<absolute path to the worktree>"` (after worktree creation; absolute is unambiguous and matches what the in-worktree branch writes via `$(pwd)`).
 - `state.branch = "<branch name created by using-git-worktrees>"`.
 - `state.base_sha = "<commit at base of worktree>"`.
 - `state.plan_path = ".bugfix/plans/<ticket-id>.md"` (after plan review passes).
@@ -229,3 +263,12 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 ## Execution Handoff
 
 In the bugfix autonomous loop this skill does NOT ask the user which execution mode to use — `bugfix:run-ticket` always dispatches `bugfix:executing-plan` after the plan is reviewed and `current_stage` advances to `executing`. Do NOT pause to offer "Subagent-Driven vs Inline Execution" choices; those upstream options are not exposed in the autonomous loop. The autonomous flow continues automatically via the loop's state-file-first dispatch.
+
+## STAGE COMPLETE — STOP HERE
+
+Your work as the `writing-plans` stage is done. You MUST stop here. Your next action MUST be to resume the next iteration of `bugfix:run-ticket`'s driver loop (read the state file, check terminal/blocked, let the loop dispatch the next stage). Do NOT:
+- Start the next stage's work inline.
+- Read files relevant to the next stage.
+- Implement / test / push / open PRs beyond this stage's documented operations.
+
+If you continue past this point, you violate the loop contract. The PostToolUse hook will surface a reminder; ignoring it compounds the violation.

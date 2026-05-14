@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# PostToolUse hook for the bugfix plugin.
+# Emits a systemMessage when a stage skill completes, reminding the agent
+# to resume the next iteration of bugfix:run-ticket's driver loop rather
+# than inlining the next stage's work.
+set -uo pipefail
+
+event="$(cat 2>/dev/null || true)"
+[[ -n "$event" ]] || exit 0
+
+tool_name="$(printf '%s' "$event" | jq -r '.tool_name // empty' 2>/dev/null || true)"
+[[ "$tool_name" == "Skill" ]] || exit 0
+
+skill="$(printf '%s' "$event" | jq -r '.tool_input.skill // empty' 2>/dev/null || true)"
+[[ -n "$skill" ]] || exit 0
+
+case "$skill" in
+  bugfix:ticket-intake|bugfix:writing-plans|bugfix:executing-plan|bugfix:autonomous-finishing|bugfix:ci-watchdog|bugfix:pr-final-review)
+    jq -nc --arg s "$skill" '{
+      systemMessage: ("Stage skill `" + $s + "` complete. Resume the next iteration of `bugfix:run-ticket`'"'"'s driver loop — read the state file, check terminal/blocked, and let the loop dispatch the next stage. Do NOT invoke another stage skill directly, and do NOT inline stage-specific work (writing files, running tests, pushing branches) outside the dispatcher loop.")
+    }'
+    ;;
+  *)
+    exit 0
+    ;;
+esac

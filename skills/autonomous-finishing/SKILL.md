@@ -63,7 +63,23 @@ The failing-test-first task from the plan (Task 1) added a regression test at: `
 🤖 Opened by bugfix autonomous loop. CI watching and parallel advocate + adversary final review run next; this comment will be supplemented with their verdicts before merge-ready.
 ```
 
-PR title: `Fix #<issue_number>: <ticket title>` where `<ticket title>` is the ticket title sanitized for human display: strip the `<untrusted-input>` wrapper tags (the title is human-visible in the GitHub UI, not LLM-consumed at this point), strip any control characters, replace newlines with spaces, and truncate to 70 chars including an ellipsis. The wrapper-stripping is unusual for adapter-returned text — explicitly: the title is the one place we render ticket text for human reading, so the LLM-safety wrapper would just appear as literal `<untrusted-input>` characters in the PR header.
+### Conditional regression-test paragraph
+
+The `## Regression test` section in the template above is rendered ONLY when `state.artifacts.regression_test_path` is non-null. This field is set by `executing-plan` from the `**Regression test file:**` declaration in Task 1; bug-class plans always have it, but improvement-class plans may legitimately omit a regression test (see `bugfix:executing-plan`'s "Classification-aware Task 1 marker handling").
+
+- **When `state.artifacts.regression_test_path` is non-null** (typical for bug PRs): include the paragraph as shown, substituting `<test path>` with `state.artifacts.regression_test_path` and `<base_sha>` with `state.base_sha`.
+- **When `state.artifacts.regression_test_path` is null** (typical for improvement PRs without a regression test): OMIT the entire `## Regression test` heading and its paragraph from the rendered PR body. Do NOT render with empty placeholders — literal `<test path>` text leaking into a PR body is a bug. The other sections (`## What changed`, `## Why`, `## Plan and review history`) are unaffected.
+
+### PR title prefix
+
+The PR title prefix is derived from `state.artifacts.intake_classification`:
+
+- `bug` → `Fix: <issue title>`
+- `improvement` → `Improve: <issue title>`
+
+`<issue title>` is the original GitHub issue title (already wrapped in `<untrusted-input>` by `ticket-adapter:read`). Strip the wrapper tags ONLY for the title field (titles must be plain text in `gh pr create` / `mcp__github__create_pull_request`); keep all body fields wrapped per the Untrusted-input rule.
+
+PR title (full form): `<prefix> #<issue_number>: <ticket title>` where `<prefix>` is `Fix` or `Improve` per the rule above and `<ticket title>` is the ticket title sanitized for human display: strip the `<untrusted-input>` wrapper tags (the title is human-visible in the GitHub UI, not LLM-consumed at this point), strip any control characters, replace newlines with spaces, and truncate to 70 chars including an ellipsis. The wrapper-stripping is unusual for adapter-returned text — explicitly: the title is the one place we render ticket text for human reading, so the LLM-safety wrapper would just appear as literal `<untrusted-input>` characters in the PR header.
 
 The ticket comment uses a shorter template (substitute `<pr_url>` with the constructed `state.pr_url` value):
 
@@ -102,3 +118,12 @@ Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <eve
 ## Next stage
 
 On success: write `state.current_stage = "ci-watching"`, exit. `bugfix:run-ticket` dispatches `bugfix:ci-watchdog`, which long-polls CI on the new PR via `ticket-adapter:ci_watch` and either advances to `pr-reviewing` on green, fixes failures (bounded retries), or blocks on timeout.
+
+## STAGE COMPLETE — STOP HERE
+
+Your work as the `autonomous-finishing` stage is done. You MUST stop here. Your next action MUST be to resume the next iteration of `bugfix:run-ticket`'s driver loop (read the state file, check terminal/blocked, let the loop dispatch the next stage). Do NOT:
+- Start the next stage's work inline.
+- Read files relevant to the next stage.
+- Implement / test / push / open PRs beyond this stage's documented operations.
+
+If you continue past this point, you violate the loop contract. The PostToolUse hook will surface a reminder; ignoring it compounds the violation.

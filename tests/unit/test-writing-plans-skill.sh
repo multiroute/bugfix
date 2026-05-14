@@ -11,8 +11,8 @@ echo "OK  frontmatter name correct"
 grep -qF "Bite-Sized Task Granularity" "$SKILL" || { echo "FAIL upstream content missing"; exit 1; }
 echo "OK  upstream content vendored"
 
-# Modification A: reproduce-bug-first rule.
-grep -qF "Bug-fix plans: regression test first" "$SKILL" || { echo "FAIL reproduce-bug-first section missing"; exit 1; }
+# Modification A: reproduce-bug-first rule (under classification-conditional section).
+grep -qiF "regression test first" "$SKILL" || { echo "FAIL reproduce-bug-first rule heading missing"; exit 1; }
 grep -qF "Task 1 MUST be" "$SKILL" || { echo "FAIL reproduce-bug-first rule wording missing"; exit 1; }
 echo "OK  modification A (reproduce-bug-first) present"
 
@@ -48,9 +48,17 @@ for section in "## State writes" "## Events" "## Block-and-comment exits"; do
 done
 echo "OK  ## State writes / ## Events / ## Block-and-comment exits sections present"
 
-# R2-I7: Task 1 regression-test path must be declared explicitly, not inferred.
-grep -qF "**Regression test file:**" "$SKILL" || { echo "FAIL writing-plans must require Task 1 to declare regression-test file path explicitly"; exit 1; }
-echo "OK  Task 1 explicit regression-test file declaration required"
+# R2-I7: Task 1 regression-test path must be declared explicitly via the
+# `**Regression test file:** <path>` marker that downstream stages parse.
+# The marker (literal string) MUST appear in the bug-class Task 1 example —
+# checking for `- Test:` alone is insufficient because that pattern also
+# appears in the generic upstream Task Structure template, so the assertion
+# would false-pass if the entire bug-class example block were deleted.
+grep -qF -- "**Regression test file:**" "$SKILL" \
+  || { echo "FAIL writing-plans bug-class Task 1 must show the explicit '**Regression test file:** <path>' marker that downstream stages parse"; exit 1; }
+grep -qF "Task 1 MUST be a failing regression test" "$SKILL" \
+  || { echo "FAIL writing-plans bug-class section missing mandatory regression-test rule"; exit 1; }
+echo "OK  Task 1 explicit regression-test file declaration required (marker + prose pinned)"
 
 # Lock infrastructure was removed (single-session driver — no concurrency races).
 if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
@@ -77,5 +85,37 @@ echo "OK  already-in-worktree detection documented (no spurious sibling worktree
 # for upstream feature workflows).
 grep -qF ".bugfix/plans/<ticket-id>.md" "$SKILL" || { echo "FAIL bugfix plan path missing"; exit 1; }
 echo "OK  bugfix plan path is .bugfix/plans/<ticket-id>.md"
+
+# Classification-conditional Task 1 rule.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL writing-plans must reference intake_classification"; exit 1; }
+echo "OK  references intake_classification"
+
+# Bug rule still present.
+grep -qiF "regression test" "$SKILL" \
+  || { echo "FAIL writing-plans must reference regression test (for bug class)"; exit 1; }
+echo "OK  bug-class regression-test rule present"
+
+# Improvement-class relaxation must be documented.
+grep -qiF "improvement plan" "$SKILL" \
+  || { echo "FAIL writing-plans must document improvement-class Task 1 relaxation"; exit 1; }
+echo "OK  improvement-class relaxation documented"
+
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
+# In-worktree branch capture must refuse to commit to base_branch.
+grep -qiF "branch == state.base_branch" "$SKILL" \
+  || grep -qiF "branch equals state.base_branch" "$SKILL" \
+  || grep -qiF "branch matches base_branch" "$SKILL" \
+  || grep -qiF "refusing to commit" "$SKILL" \
+  || { echo "FAIL writing-plans must guard against pre-staged worktree on base_branch"; exit 1; }
+echo "OK  writing-plans guards against base_branch as working branch"
 
 echo "PASS"

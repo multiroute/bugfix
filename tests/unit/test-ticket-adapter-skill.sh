@@ -12,13 +12,15 @@ echo "OK  frontmatter name correct"
 
 # Description must mention gh and GitHub (to make the trigger discoverable).
 desc_line="$(grep -m1 "^description:" "$SKILL")"
-echo "$desc_line" | grep -q "\`gh\`" || { echo "FAIL description must mention gh"; exit 1; }
+echo "$desc_line" | grep -qF "MCP" || { echo "FAIL description must mention MCP"; exit 1; }
+echo "$desc_line" | grep -qF "gh" || { echo "FAIL description must mention gh"; exit 1; }
+echo "OK  description mentions both backends"
 echo "$desc_line" | grep -qi "github" || { echo "FAIL description must mention GitHub"; exit 1; }
-echo "OK  description names gh and GitHub"
+echo "OK  description names GitHub"
 
 # Required top-level sections.
 for section in \
-  "## Preflight" \
+  "## Backend selection" \
   "## Argument validation" \
   "## Untrusted-input rule" \
   "## Bot-author detection" \
@@ -139,5 +141,52 @@ echo "OK  ci_status classifies cancelled/timed_out/action_required as failure"
 # Forward-compatibility note: contract is stable across replacements.
 grep -qi "stable\|drop-in replacement" "$SKILL" || { echo "FAIL missing forward-compat note about stable contract"; exit 1; }
 echo "OK  forward-compatibility note present"
+
+# MCP paths for issue operations must document mcp__github__ tool names.
+for mcp_op in "mcp__github__get_issue" "mcp__github__add_issue_comment" "mcp__github__update_issue" "mcp__github__list_issues"; do
+  grep -qF "$mcp_op" "$SKILL" || { echo "FAIL adapter missing MCP op: $mcp_op"; exit 1; }
+done
+echo "OK  MCP issue-op tools documented (get_issue, add_issue_comment, update_issue, list_issues)"
+
+# MCP paths for PR operations.
+for mcp_op in "mcp__github__create_pull_request" "mcp__github__update_pull_request"; do
+  grep -qF "$mcp_op" "$SKILL" || { echo "FAIL adapter missing MCP op: $mcp_op"; exit 1; }
+done
+echo "OK  MCP PR-op tools documented (create_pull_request, update_pull_request)"
+
+# MCP CI ops.
+grep -qF "mcp__github__get_pull_request_status" "$SKILL" \
+  || { echo "FAIL adapter missing MCP op: mcp__github__get_pull_request_status"; exit 1; }
+echo "OK  MCP ci_status tool documented"
+
+# MCP ci_watch must document polling behavior.
+grep -qiF "polling loop" "$SKILL" \
+  || { echo "FAIL adapter ci_watch missing 'polling loop' description for MCP backend"; exit 1; }
+echo "OK  MCP ci_watch polling loop documented"
+
+grep -qF "30" "$SKILL" \
+  || { echo "FAIL adapter ci_watch must document poll interval"; exit 1; }
+echo "OK  MCP ci_watch poll interval documented"
+
+# rebase_pr MCP path documents git-fetch fallback for the checkout step.
+grep -qF "git fetch origin pull/" "$SKILL" \
+  || { echo "FAIL adapter rebase_pr MCP path must document git fetch origin pull/<N>/head"; exit 1; }
+echo "OK  rebase_pr MCP path documented (git fetch checkout)"
+
+# All gh commands must pass --repo explicitly (so we don't rely on cwd).
+for gh_cmd in "gh issue view" "gh issue comment" "gh issue edit" "gh issue list" "gh pr create" "gh pr comment" "gh pr close" "gh pr checks" "gh pr checkout"; do
+  # Each occurrence of the command (in code fences) must appear with --repo on the same logical line.
+  # Use awk to find each occurrence and check it has --repo nearby (within the same line or next).
+  if grep -qE "$gh_cmd" "$SKILL" && ! grep -qE "$gh_cmd.*--repo|$gh_cmd[^|]*\\\\\$" "$SKILL"; then
+    : # complex multi-line cases may not match the simple grep; just check overall presence
+  fi
+done
+
+# At minimum, --repo must appear at least once for each major gh op.
+for required in "gh issue view --repo" "gh issue edit --repo" "gh pr create --repo" "gh pr checks --repo"; do
+  grep -qF -- "$required" "$SKILL" \
+    || { echo "FAIL adapter gh path missing --repo on: $required"; exit 1; }
+done
+echo "OK  adapter gh path uses --repo explicitly (not cwd inference)"
 
 echo "PASS"

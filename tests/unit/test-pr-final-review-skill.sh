@@ -101,4 +101,45 @@ if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
 fi
 echo "OK  no lock-infrastructure references"
 
+# Reviewer prompts must branch on classification.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL pr-final-review must reference intake_classification"; exit 1; }
+echo "OK  reviewer prompts branch on classification"
+
+# Bug-class adversary check.
+grep -qiF "is the regression test real" "$SKILL" \
+  || { echo "FAIL adversary prompt missing 'is the regression test real' (bug class)"; exit 1; }
+echo "OK  bug-class adversary check documented"
+
+# Improvement-class adversary check.
+grep -qiF "free of regressions" "$SKILL" \
+  || { echo "FAIL adversary prompt missing 'free of regressions' (improvement class)"; exit 1; }
+echo "OK  improvement-class adversary check documented"
+
+# Backend-routed diff retrieval.
+grep -qF "adapter_backend" "$SKILL" \
+  || { echo "FAIL pr-final-review must reference adapter_backend for diff retrieval"; exit 1; }
+echo "OK  diff retrieval routes on adapter_backend"
+
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
+# Merge-ready PR/ticket comments must be conditional on regression_test_path.
+grep -qiF "regression_test_path" "$SKILL" \
+  || { echo "FAIL pr-final-review must reference regression_test_path for comment branching"; exit 1; }
+echo "OK  pr-final-review references regression_test_path"
+
+# Conditional handling must be documented.
+grep -qiF "omit the paragraph" "$SKILL" \
+  || grep -qiF "when regression_test_path is null" "$SKILL" \
+  || grep -qiF "rendered ONLY when" "$SKILL" \
+  || { echo "FAIL pr-final-review must document null-handling for regression_test_path"; exit 1; }
+echo "OK  pr-final-review documents conditional comment handling"
+
 echo "PASS"

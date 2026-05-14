@@ -1,6 +1,6 @@
 ---
 name: ticket-adapter
-description: Use when a bugfix stage skill needs to read a ticket, post a comment, set a ticket or PR status, push a branch, open or close a PR, poll CI, or rebase. The single place in the plugin that runs `gh` commands or hits GitHub's API.
+description: Use when a bugfix stage skill needs to read a ticket, post a comment, set a ticket or PR status, push a branch, open or close a PR, poll CI, or rebase. The single place in the plugin that hits GitHub. Prefers the GitHub MCP server when available, falls back to `gh` CLI otherwise.
 ---
 
 # bugfix:ticket-adapter
@@ -9,9 +9,30 @@ This skill is the only place in the bugfix plugin that talks to a ticket tracker
 
 **You (the agent) invoke this skill** when an upstream stage skill says "call `ticket-adapter:<op>`". Read the operation's section, run the documented command via the `Bash` tool, parse the output as specified, wrap any ticket-supplied text in `<untrusted-input>` tags, and return the structured result.
 
-## Preflight
+## Backend selection
 
-Before any operation, verify the host has `gh` installed (version ≥ 2.40, which introduced the `--watch --fail-fast` flags `ci_watch` depends on) and authenticated:
+The adapter supports two backends — the canonical GitHub MCP server (`mcp__github__*` tools) and the `gh` CLI. Selection is cached per-run via `state.artifacts.adapter_backend` so a single run never half-uses MCP and half-uses gh.
+
+### Probe order
+
+At the top of every operation, check `state.artifacts.adapter_backend`:
+
+1. **If set** → use that backend for this operation. Skip the probe.
+2. **If unset** → probe in this order:
+   - **MCP first.** Look in your available toolset for `mcp__github__get_issue` (or any `mcp__github__*` tool — the canonical GitHub MCP server exposes them under this prefix). If found, set backend = `"mcp"`.
+   - **gh fallback.** Run `command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1` and verify `gh --version` reports `>= 2.40` (needed for `--watch --fail-fast`). If all three pass, set backend = `"gh"`.
+   - **Neither.** Return `{"error": "neither MCP GitHub nor gh CLI available — install one and retry"}`. The caller (a stage skill) decides whether to retry or escalate via `bugfix:block-and-comment(tech-failure)`.
+3. Write the chosen backend to `state.artifacts.adapter_backend`. Subsequent operations within the same run read this cache. The cache lives for the lifetime of one run — a new run (fresh `state.json`, or one that has reached a `terminal` state) re-probes from scratch, so mid-run installs of MCP or gh do not affect in-flight runs but are picked up on the next run.
+
+### Per-op subsection convention
+
+Each of the 11 per-op subsections below (`### read`, `### ticket_comment`, ..., `### rebase_pr`) is documented in this skill. 10 of them gain a `#### MCP path` subsection alongside the existing `gh` path (every op except `push`, which uses plain git on both backends). The gh path is the existing default content. The MCP path appears as a `#### MCP path` subsection within each op, introduced by:
+
+> When `state.artifacts.adapter_backend == "mcp"`:
+
+The MCP path's return shape, untrusted-input wrapping, and argument validation rules are identical to the gh path — only the underlying mechanism differs. Callers (stage skills) do NOT branch on backend themselves; the adapter handles routing once per op invocation.
+
+### gh-only preflight (when backend = gh)
 
 ```bash
 command -v gh >/dev/null 2>&1 || { echo "gh CLI missing"; exit 1; }
@@ -24,13 +45,9 @@ if [[ "$gh_major" -lt 2 || ( "$gh_major" -eq 2 && "$gh_minor" -lt 40 ) ]]; then
 fi
 ```
 
-If any check fails, do NOT proceed with the requested operation. Return:
+### MCP-only preflight (when backend = mcp)
 
-```json
-{ "error": "gh CLI missing, too old, or not authenticated" }
-```
-
-The caller (a stage skill) decides whether to retry or escalate via `bugfix:block-and-comment`.
+No bash preflight needed — tool availability is the probe. The MCP-path operations call the tools directly; tool-not-available errors surface as adapter-level `{"error": "..."}` returns and escalate via `block-and-comment(tech-failure)` per the per-op error tables below.
 
 ## Argument validation
 
@@ -102,7 +119,7 @@ first_token="$(printf '%s' "$body" | sed -e 's|</\{0,1\}untrusted-input>||gI' | 
 
 Issue and PR operations take **bare integer identifiers**: `read(issue_number)`, `ticket_comment(issue_number, ...)`, `set_status(issue_number, ...)`, `open_pr(...)` returns `pr_number`, etc. Do NOT pass the plugin's structured `ticket_id` string (`<owner>-<repo>-<number>`) — `gh` does not accept that format.
 
-**Repo targeting:** the adapter assumes the agent's working directory is inside the target repo's git worktree (which `bugfix:using-git-worktrees` enforces for the autonomous loop). `gh` infers the target repo from `git remote get-url origin`. Callers that need to target a different repo MUST `cd` into that repo's worktree before invoking the adapter.
+**Repo targeting:** the adapter passes `--repo "<state.owner>/<state.repo>"` explicitly on every `gh` invocation. The state fields are initialized by `run-ticket` from the URL parse, so they're populated before any adapter op runs. Callers do NOT need to be inside the target repo's worktree for the adapter to work correctly. (Git-only ops `push` and `git rebase` inside `rebase_pr` DO need a worktree — those are invoked from inside `state.worktree_path`.)
 
 **Converting from `ticket_id` to `issue_number`:** the bugfix plugin's structured `ticket_id` is `<owner>-<repo>-<number>`. Extract `<number>` as the trailing run of digits. The caller is responsible for this; the adapter consumes only the integer.
 
@@ -119,7 +136,7 @@ Each operation has the same shape: signature, gh command (or git for `push`), ou
 **gh command:**
 
 ```bash
-gh issue view "<issue_number>" --json title,body,state,labels,comments
+gh issue view --repo "<state.owner>/<state.repo>" "<issue_number>" --json title,body,state,labels,comments
 ```
 
 **Output parsing:** parse stdout as JSON. Remap `state` -> `status` (values: `open` | `closed`). For each comment, capture `author.login`, `authorAssociation`, `body`, `createdAt`; derive `is_bot` per Bot-author detection above.
@@ -149,6 +166,20 @@ gh issue view "<issue_number>" --json title,body,state,labels,comments
 - exit 404 (issue not found) -> `{ "error": "issue <issue_number> not found" }`
 - any other non-zero exit -> `{ "error": "<captured stderr>" }`
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+# Pseudocode — concrete tool calls depend on the MCP server's exact op surface.
+issue    = mcp__github__get_issue(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>)
+comments = mcp__github__get_issue_comments(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>)
+```
+
+Merge into the same `{title, body, labels, status, comments[]}` shape as the gh path. Apply the same `<untrusted-input>` wrapping to `title`, `body`, and every `comments[].body` (and `comments[].author_login` per the rule below). Derive `is_bot` per the Bot-author detection section.
+
+On any MCP error (tool unavailable, network, permission), return `{"error": "<message>"}` — same shape as the gh-path error contract.
+
 ### ticket_comment
 
 **Signature:** `ticket_comment(issue_number, body) -> {comment_id}`
@@ -156,7 +187,7 @@ gh issue view "<issue_number>" --json title,body,state,labels,comments
 **gh command:** body via stdin to avoid shell-escaping pitfalls.
 
 ```bash
-gh issue comment "<issue_number>" --body-file -
+gh issue comment --repo "<state.owner>/<state.repo>" "<issue_number>" --body-file -
 # pipe the comment body to stdin
 ```
 
@@ -167,6 +198,16 @@ gh issue comment "<issue_number>" --body-file -
 **Untrusted-input handling:** N/A (input is bot-authored; output has no ticket-quoted text).
 
 **Errors:** non-zero exit -> `{ "error": "<captured stderr>" }`. Note: GitHub caps comment body at ~65536 chars; the adapter does NOT truncate - the caller is responsible for staying under the limit.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+result = mcp__github__add_issue_comment(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>, body=<body>)
+```
+
+Return `{"comment_id": <result.id>}`. The MCP server returns the comment's numeric ID; convert to string for shape parity with the gh path. Same body-length cap (~65536 chars) — caller's responsibility, not adapter-side truncation.
 
 ### set_status
 
@@ -186,7 +227,7 @@ gh issue comment "<issue_number>" --body-file -
 # the adapter MUST swallow that specific error and only escalate on other failures.
 ensure_label() {
   local name="$1" color="$2" desc="$3"
-  gh label create "$name" --color "$color" --description "$desc" 2>&1 \
+  gh label create --repo "<state.owner>/<state.repo>" "$name" --color "$color" --description "$desc" 2>&1 \
     | grep -qiE "already exists|not found" || true
   # If `gh label create` succeeded, fine. If it failed with "already exists",
   # also fine (the label is there). If it failed for any other reason (auth,
@@ -205,7 +246,7 @@ This block runs at the top of every `set_status` invocation. The cost is four ch
 
 ```bash
 # Example: status="in-progress" — remove all three non-target labels.
-gh issue edit "<issue_number>" \
+gh issue edit --repo "<state.owner>/<state.repo>" "<issue_number>" \
   --add-label "bugfix-status:in-progress" \
   --remove-label "bugfix-status:needs-info" \
   --remove-label "bugfix-status:rejected" \
@@ -220,6 +261,30 @@ The `--remove-label` list MUST contain all three non-target labels for every sta
 
 **Errors:** non-zero on `gh issue edit` -> `{ "error": "<stderr>" }`. With auto-create above, the historical "label not found" path should not fire; if it does (e.g., auth missing), the caller treats it as any other adapter error.
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+# 1. Ensure the four bugfix-status:* labels exist. MCP server exposes label creation:
+for name, color, desc in [
+  ("bugfix-status:in-progress",     "0e8a16", "bugfix loop actively working"),
+  ("bugfix-status:needs-info",      "fbca04", "bugfix loop paused, needs human input"),
+  ("bugfix-status:rejected",        "b60205", "bugfix loop rejected this ticket"),
+  ("bugfix-status:ready-for-merge", "1d76db", "bugfix loop completed review; ready for human merge"),
+]:
+  try: mcp__github__create_label(owner=<state.owner>, repo=<state.repo>, name=name, color=color, description=desc)
+  except AlreadyExists: pass
+
+# 2. Read current labels, remove any other bugfix-status:* label, add the new one.
+issue = mcp__github__get_issue(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>)
+new_labels = [l for l in issue.labels if not l.startswith("bugfix-status:")]
+new_labels.append("bugfix-status:" + <status>)
+mcp__github__update_issue(owner=<state.owner>, repo=<state.repo>, issue_number=<issue_number>, labels=new_labels)
+```
+
+Return `{"ok": true}`. If `mcp__github__create_label` is not exposed by the MCP server, the adapter assumes the labels were pre-created (see README first-run setup) and proceeds to step 2; if step 2 fails because a label is missing, return `{"error": "label <name> not found — please run first-run setup"}`.
+
 ### list_ready
 
 **Signature:** `list_ready(label) -> [<int>, <int>, ...]` (raw issue numbers).
@@ -227,7 +292,7 @@ The `--remove-label` list MUST contain all three non-target labels for every sta
 **gh command:**
 
 ```bash
-gh issue list --label "<label>" --state open --json number,title
+gh issue list --repo "<state.owner>/<state.repo>" --label "<label>" --state open --json number,title
 ```
 
 **Output parsing:** parse JSON array, emit `[.[].number]`.
@@ -237,6 +302,16 @@ gh issue list --label "<label>" --state open --json number,title
 **Asymmetry vs. parent spec §6.2:** the parent contract names the return type `ticket_ids[]` (i.e., `<owner>-<repo>-<number>` strings). The adapter intentionally returns *raw numbers* because the adapter doesn't know its own owner/repo context. The caller (a stage skill that knows the repo it's running in) composes the full `<owner>-<repo>-<number>` ticket id.
 
 **Errors:** non-zero exit -> caller should treat as empty list and surface the stderr.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+issues = mcp__github__list_issues(owner=<state.owner>, repo=<state.repo>, labels=[<label>], state="open")
+```
+
+Return the list of `issue.number` integers. Same charset constraint on `<label>` as the gh path.
 
 ### push
 
@@ -261,7 +336,7 @@ git push -u origin "<branch>"
 **gh command:** body via stdin.
 
 ```bash
-gh pr create --base "<base>" --head "<branch>" --title "<title>" --body-file -
+gh pr create --repo "<state.owner>/<state.repo>" --base "<base>" --head "<branch>" --title "<title>" --body-file -
 # pipe the PR body to stdin
 ```
 
@@ -273,6 +348,18 @@ gh pr create --base "<base>" --head "<branch>" --title "<title>" --body-file -
 
 **Errors:** non-zero exit -> `{ "error": "<stderr>" }`.
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+pr = mcp__github__create_pull_request(owner=<state.owner>, repo=<state.repo>, title=<title>, body=<body>, head=<branch>, base=<base>)
+```
+
+Return `{"pr_number": pr.number}` (integer) for shape parity. The PR URL is constructed by the caller (`autonomous-finishing`) as `https://github.com/<state.owner>/<state.repo>/pull/<pr_number>`.
+
+Same title/body validation rules apply (length cap, control-char stripping).
+
 ### pr_comment
 
 **Signature:** `pr_comment(pr_number, body) -> {comment_id}`
@@ -280,7 +367,7 @@ gh pr create --base "<base>" --head "<branch>" --title "<title>" --body-file -
 **gh command:** body via stdin.
 
 ```bash
-gh pr comment "<pr_number>" --body-file -
+gh pr comment --repo "<state.owner>/<state.repo>" "<pr_number>" --body-file -
 # pipe the comment body to stdin
 ```
 
@@ -290,6 +377,16 @@ gh pr comment "<pr_number>" --body-file -
 
 **Errors:** non-zero -> `{ "error": "<stderr>" }`. Same 65536-char body limit as ticket_comment.
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+result = mcp__github__add_issue_comment(owner=<state.owner>, repo=<state.repo>, issue_number=<pr_number>, body=<body>)
+```
+
+GitHub treats PR comments as issue comments at the REST/API level, so the same op handles both. Return `{"comment_id": result.id}`.
+
 ### pr_close
 
 **Signature:** `pr_close(pr_number, reason) -> {ok}`
@@ -298,16 +395,28 @@ gh pr comment "<pr_number>" --body-file -
 
 ```bash
 # Step 1: post the closing reason as a PR comment (via stdin to avoid shell escaping).
-gh pr comment "<pr_number>" --body-file -
+gh pr comment --repo "<state.owner>/<state.repo>" "<pr_number>" --body-file -
 # pipe the reason text to stdin
 
 # Step 2: close the PR.
-gh pr close "<pr_number>"
+gh pr close --repo "<state.owner>/<state.repo>" "<pr_number>"
 ```
 
 **Output parsing:** none beyond exit code.
 
 **Return shape:** `{ "ok": true }` or `{ "error": "<stderr>" }`.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+# Two-step: post the close reason as a comment first, then close.
+mcp__github__add_issue_comment(owner=<state.owner>, repo=<state.repo>, issue_number=<pr_number>, body=<close_reason>)
+mcp__github__update_pull_request(owner=<state.owner>, repo=<state.repo>, pull_number=<pr_number>, state="closed")
+```
+
+Return `{"ok": true}`. If `update_pull_request` is not exposed by the MCP server (some servers expose only create + read), the adapter MUST surface a clear `{"error": "MCP server lacks update_pull_request — cannot close PR via MCP backend"}` rather than silently switching backends. Backend consistency rules forbid mid-run switching.
 
 ### ci_status
 
@@ -316,7 +425,7 @@ gh pr close "<pr_number>"
 **gh command (primary):**
 
 ```bash
-gh pr checks "<pr_number>" --json name,status,conclusion,detailsUrl
+gh pr checks --repo "<state.owner>/<state.repo>" "<pr_number>" --json name,status,conclusion,detailsUrl
 ```
 
 **Output parsing:** parse JSON. Aggregate across runs:
@@ -334,7 +443,7 @@ gh pr checks "<pr_number>" --json name,status,conclusion,detailsUrl
 **Failed-logs sub-call (only when status == failure):** for each failed run, extract the run id from `detailsUrl` — it's the path segment immediately following `/runs/` (NOT the trailing segment, which is the job id). For URL `https://github.com/owner/repo/actions/runs/12345/job/67890`, the run id is `12345`. Then:
 
 ```bash
-gh run view "<run_id>" --log-failed
+gh run view --repo "<state.owner>/<state.repo>" "<run_id>" --log-failed
 ```
 
 Concatenate output across failed runs into a single `failed_logs` string.
@@ -356,6 +465,20 @@ Concatenate output across failed runs into a single `failed_logs` string.
 - non-zero on the `pr checks` call -> `{ "error": "<stderr>" }`
 - non-zero on a per-run `run view` call -> omit that run's log but keep going; surface the issue in `failed_logs` as `<could not fetch log for run N: stderr>`.
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+status = mcp__github__get_pull_request_status(owner=<state.owner>, repo=<state.repo>, pull_number=<pr_number>)
+```
+
+Return the same `{status, runs[]}` shape as the gh path:
+- `status` is `"success"` | `"failure"` | `"pending"`.
+- `runs[]` is `[{name, conclusion, details_url}, ...]` derived from the MCP response (remapped from the canonical server's `detailsUrl` to snake_case to match the gh path's return shape).
+
+`<run_id>` extraction (from `detailsUrl`) follows the same regex validation as the gh path. The `run_id` is the highest-risk placeholder — see Argument validation.
+
 ### ci_watch
 
 **Signature:** `ci_watch(pr_number, timeout_minutes=120) -> {status, timed_out?}`
@@ -368,7 +491,7 @@ A blocking variant of `ci_status` that returns only when CI reaches a terminal v
 
 ```bash
 # 120-minute hard ceiling enforced by /usr/bin/env timeout (or the GNU `timeout` binary on Linux).
-timeout "<timeout_minutes>m" gh pr checks "<pr_number>" --watch --fail-fast --interval 60
+timeout "<timeout_minutes>m" gh pr checks --repo "<state.owner>/<state.repo>" "<pr_number>" --watch --fail-fast --interval 60
 ```
 
 `gh pr checks --watch` blocks until every check reports a terminal conclusion. `--fail-fast` exits as soon as any check fails. `--interval 60` matches the 60-second poll cadence the prior implementation used. The outer `timeout` enforces the hard ceiling so a stuck CI run can't pin the agent indefinitely.
@@ -376,7 +499,7 @@ timeout "<timeout_minutes>m" gh pr checks "<pr_number>" --watch --fail-fast --in
 **Recommended invocation pattern (caller side):**
 
 ```
-Bash(command="timeout 120m gh pr checks 260 --watch --fail-fast --interval 60",
+Bash(command="timeout 120m gh pr checks --repo <state.owner>/<state.repo> 260 --watch --fail-fast --interval 60",
      run_in_background=true,
      description="Watch PR #260 CI checks until terminal")
 ```
@@ -409,6 +532,30 @@ The agent receives a completion notification when the background process exits. 
 
 **Difference from `ci_status`:** `ci_status` is a snapshot — returns immediately. `ci_watch` blocks. Use `ci_status` when you need to check current state; use `ci_watch` when you need to wait for terminal. The reference implementation of `ci-watchdog` calls `ci_status` once on entry (to skip the wait if CI is already terminal) and then `ci_watch` (to block until terminal).
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+The MCP GitHub server has no blocking watch primitive. The adapter implements polling in-skill:
+
+```
+poll_interval_seconds = 30   # hardcoded; tune in skill body if needed
+elapsed = 0
+while elapsed < <timeout_minutes> * 60:
+    snapshot = ci_status(<pr_number>)              # this op's MCP path
+    if snapshot.status == "success":
+        return {status: "success"}
+    if snapshot.status == "failure":
+        return {status: "failure"}
+    sleep poll_interval_seconds
+    elapsed += poll_interval_seconds
+return {status: "timeout", timed_out: true}
+```
+
+The polling loop runs in the caller's session (typically `ci-watchdog`'s long-running invocation). Unlike the gh path, this consumes session time proportional to CI duration. For a 60-minute CI run polled every 30 s, that's 120 status calls.
+
+The 30-second interval is hardcoded — not config-driven yet. Future tuning would add a `config.ci_poll_interval_seconds` knob (intentionally out of scope here).
+
 ### rebase_pr
 
 **Signature:** `rebase_pr(pr_number, base) -> {success, conflicts?}`
@@ -416,7 +563,7 @@ The agent receives a completion notification when the background process exits. 
 **Command sequence:**
 
 ```bash
-gh pr checkout "<pr_number>"
+gh pr checkout --repo "<state.owner>/<state.repo>" "<pr_number>"
 git fetch origin "<base>"
 git rebase "origin/<base>"
 # If rebase succeeds AND `git status` shows no conflicts:
@@ -443,6 +590,23 @@ git push --force-with-lease
 **Critical:** on conflict, do NOT attempt auto-resolution. The bugfix plugin's policy (parent spec §9.5) is that cross-ticket conflicts on a public PR must be human-resolved.
 
 **Side-effect warning:** `gh pr checkout` switches branches in the current working tree. The plugin's design assumes this op runs inside a per-ticket worktree (set up by `bugfix:using-git-worktrees`), so the branch switch is isolated. Callers must not invoke this op with uncommitted changes in the worktree.
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+`gh pr checkout` has no MCP equivalent; the MCP path uses plain git to fetch the PR branch:
+
+```bash
+git fetch origin pull/<pr_number>/head:<branch>
+git checkout <branch>
+git rebase <base>
+git push --force-with-lease origin <branch>
+```
+
+Same conflict detection as the gh path — if `git rebase` exits non-zero with conflict markers, run `git rebase --abort` to leave the worktree clean, then return `{"success": false, "conflicts": [...]}` where the list comes from `git diff --name-only --diff-filter=U` (catches all conflict types: UU, AA, DD, DU, UD, UA, AU — not just both-modified). Return `{"success": true}` on clean rebase + push.
+
+The `<branch>` placeholder MUST match the same regex as the gh path (`^[A-Za-z0-9._/+-]+$` and no leading `-`) — Argument validation rules apply unchanged.
 
 ## Errors
 

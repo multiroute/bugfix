@@ -49,4 +49,31 @@ if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
 fi
 echo "OK  no lock-infrastructure references"
 
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
+# PR title prefix branches on classification.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must reference intake_classification for PR title"; exit 1; }
+echo "OK  PR title branches on classification"
+
+grep -qF "Fix:" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must document 'Fix:' prefix"; exit 1; }
+echo "OK  'Fix:' prefix documented"
+
+grep -qF "Improve:" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must document 'Improve:' prefix"; exit 1; }
+echo "OK  'Improve:' prefix documented"
+
+# PR body regression-test paragraph must be conditional on regression_test_path.
+grep -qiF "regression_test_path" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must reference regression_test_path for PR body branching"; exit 1; }
+echo "OK  PR body regression-test paragraph is conditional"
+
 echo "PASS"

@@ -89,4 +89,41 @@ if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
 fi
 echo "OK  no lock-infrastructure references"
 
+# STAGE COMPLETE footer must be present and contain the STOP HERE directive.
+grep -qF "## STAGE COMPLETE — STOP HERE" "$SKILL" \
+  || { echo "FAIL missing STAGE COMPLETE footer header"; exit 1; }
+echo "OK  STAGE COMPLETE footer header present"
+
+grep -qF "you violate the loop contract" "$SKILL" \
+  || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
+echo "OK  STAGE COMPLETE footer contains loop-contract directive"
+
+# Classification-aware Task 1 marker handling.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL executing-plan must branch on intake_classification for Task 1 marker"; exit 1; }
+echo "OK  executing-plan branches on intake_classification"
+
+# Bug-class still requires the marker (existing behavior).
+grep -qF "Regression test file" "$SKILL" \
+  || { echo "FAIL executing-plan must still document Regression test file marker for bugs"; exit 1; }
+echo "OK  Regression test file marker documented (bug class)"
+
+# Improvement-class tolerates absence.
+grep -qiF "regression_test_path = null" "$SKILL" \
+  || grep -qiF "regression_test_path = None" "$SKILL" \
+  || { echo "FAIL executing-plan must tolerate absent marker for improvement class"; exit 1; }
+echo "OK  improvement-class tolerates absent regression-test marker"
+
+# Task progress must be persisted to state for crash-resume.
+grep -qiF "tasks_done" "$SKILL" \
+  || { echo "FAIL executing-plan must persist task progress to state.artifacts.executing.tasks_done"; exit 1; }
+echo "OK  executing-plan persists task progress for crash-resume"
+
+# Resume logic must be documented.
+grep -qiF "resuming mid-execution" "$SKILL" \
+  || grep -qiF "skip the implementer dispatch" "$SKILL" \
+  || grep -qiF "already in the array" "$SKILL" \
+  || { echo "FAIL executing-plan must document resume-from-tasks_done logic"; exit 1; }
+echo "OK  executing-plan documents resume-from-tasks_done"
+
 echo "PASS"

@@ -10,8 +10,9 @@ This skill is invoked by `bugfix:run-ticket` when `state.current_stage == "execu
 1. Read `.bugfix/runs/<ticket-id>.json` and confirm `current_stage == "executing"`. If not, exit with an error.
 2. cd into the worktree at `state.worktree_path` (created by `writing-plans` in the prior stage).
 3. Read the plan at `state.plan_path` once and extract all tasks into working memory (per the upstream skill's pattern below).
-4. Run the per-task loop (see body below) following the modifications in this skill that extend the upstream subagent-driven-development pattern.
-5. After every task completes review-clean: set `state.current_stage = "finishing"`, exit.
+4. **Crash-resume check.** If `state.artifacts.executing.tasks_done` is non-empty, the plan is resuming mid-execution (the prior session crashed after committing one or more tasks). Read the array, and for each plan task: if its number is already in `tasks_done`, skip the implementer dispatch for that task — its work is already committed. Resume from the lowest task number NOT in the array. If the field is absent or empty, run from Task 1 as usual. The `tasks_done` array is the authoritative crash-recoverable checkpoint; TodoWrite is in-context only and does NOT survive a crash.
+5. Run the per-task loop (see body below) following the modifications in this skill that extend the upstream subagent-driven-development pattern.
+6. After every task completes review-clean: set `state.current_stage = "finishing"`, exit.
 
 If a task's reviews exhaust their retry budget, exit via `bugfix:block-and-comment(tech-failure)` per the per-task escalation below.
 
@@ -325,14 +326,20 @@ Done!
 
 Task 1 of every bug-fix plan creates the failing regression test (per `bugfix:writing-plans`'s `reproduce-bug-first` rule). When Task 1's implementer reports DONE and both reviews pass, record the test file path so downstream stages can find it.
 
-**Source of truth: the plan declares the path explicitly.** `bugfix:writing-plans` requires Task 1 to include a leading `**Regression test file:** <path>` declaration line. The path is read from that declaration, NOT inferred from `git diff` — the diff heuristic was fragile when Task 1 touched multiple files (e.g., a new test in `tests/foo_test.py` AND an extension to `tests/conftest.py`).
+**Source of truth: the plan declares the path explicitly.** `bugfix:writing-plans` requires bug-class Task 1 to include a leading `**Regression test file:** <path>` declaration line. The path is read from that declaration, NOT inferred from `git diff` — the diff heuristic was fragile when Task 1 touched multiple files (e.g., a new test in `tests/foo_test.py` AND an extension to `tests/conftest.py`).
+
+### Classification-aware Task 1 marker handling
+
+The handling of the `**Regression test file:** <path>` marker branches on `state.artifacts.intake_classification` (set by `bugfix:ticket-intake`):
 
 1. Read `.bugfix/runs/<ticket-id>.json`.
-2. Parse the Task 1 section of `state.plan_path` for a line matching `^\*\*Regression test file:\*\* (.+)$`. If absent: this is a plan-format error — exit via `bugfix:block-and-comment(tech-failure, reason="Task 1 missing Regression test file declaration")`. If multiple matches: take the first; warn in the event log.
-3. Set `state.artifacts.regression_test_path = "<declared path>"`. Use a worktree-relative path so the value works across host filesystems.
+2. Parse the Task 1 section of `state.plan_path` for a line matching `^\*\*Regression test file:\*\* (.+)$`.
+3. Branch:
+   - **When `state.artifacts.intake_classification == "bug"`:** the marker is REQUIRED. If present, set `state.artifacts.regression_test_path = "<declared path>"` (worktree-relative). If absent: this is a plan-format error — exit via `bugfix:block-and-comment(tech-failure, reason="Task 1 missing Regression test file declaration")`. If multiple matches: take the first; warn in the event log.
+   - **When `state.artifacts.intake_classification == "improvement"`:** the marker is OPTIONAL. Some improvement plans DO add a test as Task 1 (and the declaration line is still the canonical source). Try-parse the marker: if present, set `state.artifacts.regression_test_path = "<declared path>"`. If absent, set `state.artifacts.regression_test_path = null` and continue. Do NOT tech-failure block — improvement plans legitimately may not have a regression test, and downstream consumers honor a null path.
 4. Write state back. Continue to Task 2.
 
-This field is consumed by `bugfix:autonomous-finishing` (PR body template references it), `bugfix:ci-watchdog` (fix sub-agent must not weaken this test), and `bugfix:pr-final-review` (advocate runs the regression test on both base and PR tip). If you skip this write, those downstream stages have no path to run the test from — silent breakage.
+This field is consumed by `bugfix:autonomous-finishing` (PR body template renders the regression-test paragraph only when the path is non-null), `bugfix:ci-watchdog` (fix sub-agent must not weaken this test when the path is set; otherwise must not weaken existing test coverage broadly), and `bugfix:pr-final-review` (advocate runs the regression test on both base and PR tip when the path is set). If you skip this write for a bug, those downstream stages have no path to run the test from — silent breakage.
 
 ## State advance on completion
 
@@ -347,6 +354,7 @@ After all tasks complete (final code-reviewer subagent approves the full diff pe
 This stage writes the following fields across its lifetime:
 
 - `state.artifacts.regression_test_path` — after Task 1 succeeds (see "State writes after Task 1" section).
+- `state.artifacts.executing.tasks_done` — array of task numbers (integers) that have completed both reviews and committed. Appended to atomically with the `task_done` event emission. Read on entry to skip already-done tasks on a crash-resume.
 - `state.retries.executing.task_<N>_spec_review` — incremented on each spec-reviewer failure per task. Counter is per-mode (spec_review vs code_quality_review) and per-task.
 - `state.retries.executing.task_<N>_code_quality_review` — incremented on each code-quality reviewer failure per task. Same per-mode-per-task scope.
 - `state.updated_at` — refreshed on every state write.
@@ -363,6 +371,8 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 - `task_code_quality_review_failed` — detail: `{"task_number": <int>, "attempt": <int>}`. After a code-quality reviewer reports issues.
 - `task_done` — detail: `{"task_number": <int>}`. After both reviewers approve a task. The last `task_done` (for the final task) is emitted at "State advance on completion" above.
 
+**Crash-resume checkpoint (`task_done` companion write).** Each time `task_done` is emitted for task N, the controller MUST also append N to `state.artifacts.executing.tasks_done` (initialize the array as `[]` if absent, and initialize `state.artifacts.executing` as an empty object if absent). This is a state-level checkpoint distinct from the in-context TodoWrite — on session crash + resume (a fresh session re-invokes `fix bug <url>` → run-ticket dispatches executing-plan again), the resumed executing-plan reads this array per the "Crash-resume check" in the State-file-first context section and skips any task whose number is already in it before dispatching its implementer. The read-modify-write of `state.artifacts.executing.tasks_done` happens in the same critical section as the `state.updated_at` refresh and the `task_done` event append, so the state file and event log never disagree about which tasks are committed.
+
 ## Block-and-comment escalation paths (retry table)
 
 | Failure | Action 1 | Action 2 | Action 3 |
@@ -374,3 +384,12 @@ Emitted via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <
 | Code-quality reviewer flags issues | Same implementer fixes | **Fresh implementer**, bigger model | `bugfix:block-and-comment(tech-failure)` |
 
 Retry budgets read from `config.retry_budgets.spec_review` (default 2) and `config.retry_budgets.code_quality_review` (default 2).
+
+## STAGE COMPLETE — STOP HERE
+
+Your work as the `executing-plan` stage is done. You MUST stop here. Your next action MUST be to resume the next iteration of `bugfix:run-ticket`'s driver loop (read the state file, check terminal/blocked, let the loop dispatch the next stage). Do NOT:
+- Start the next stage's work inline.
+- Read files relevant to the next stage.
+- Implement / test / push / open PRs beyond this stage's documented operations.
+
+If you continue past this point, you violate the loop contract. The PostToolUse hook will surface a reminder; ignoring it compounds the violation.

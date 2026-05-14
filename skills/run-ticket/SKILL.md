@@ -58,7 +58,7 @@ Check whether `.bugfix/runs/<ticket_id>.json` exists. If it does, the loop is re
 If the file does NOT exist, create it **atomically** using `set -o noclobber`. This prevents two concurrent `run-ticket` invocations on the same URL from both seeing "file absent" and both writing initial state.
 
 ```bash
-mkdir -p .runs
+mkdir -p .bugfix/runs
 # Atomic create — fails (non-zero exit) if the file appeared between the
 # absent-check above and this write. On collision the OTHER invocation
 # initialized the state; we simply join the loop without overwriting.
@@ -153,6 +153,19 @@ else:
 **Iteration cap:** 100 per invocation. The loop should never need more than ~10 stage transitions (intake → planning → executing → finishing → ci-watching → pr-reviewing → terminal), so 100 is generous and protects against pathological infinite loops. On hit, set `state.terminal = "failed"` (record cause via `state.artifacts.failure_reason = "iteration cap reached"`). Do NOT also set `blocked_reason` — `terminal` and `blocked_reason` are mutually exclusive per the run-state schema.
 
 **Progress guard:** in addition to the cap, two consecutive iterations with no semantic-state change AND no stage advance is declared a stall. Prevents the cap from being a slow timeout when a stage silently no-ops.
+
+### Red flags during the driver loop
+
+If you catch yourself thinking any of these, STOP and let the loop above dispatch the next stage:
+
+| Thought | Reality |
+|---|---|
+| "I already have the data, I can do this inline" | The driver loop's iterations exist so each stage's state-file read picks up changes from the prior stage cleanly. Inlining breaks that handoff. |
+| "User said fix it, I should just deliver" | Delivery comes from finishing the loop, not from skipping it. |
+| "Stage X is simple, I can collapse it with Y" | Stages are independent for a reason — review checkpoints, retry budgets, terminal-state tracking. Don't collapse. |
+| "The adapter failed, I'll work around it" | Adapter failures must escalate via `block-and-comment(tech-failure)`. Don't improvise. |
+
+Every iteration MUST go through the driver loop's stage dispatch (via the `Skill` tool on the resolved stage skill). Bypassing the loop to inline stage work violates the contract.
 
 ## Stage-to-skill mapping
 
