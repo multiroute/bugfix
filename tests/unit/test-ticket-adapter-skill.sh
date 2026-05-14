@@ -12,13 +12,14 @@ echo "OK  frontmatter name correct"
 
 # Description must mention gh and GitHub (to make the trigger discoverable).
 desc_line="$(grep -m1 "^description:" "$SKILL")"
-echo "$desc_line" | grep -q "\`gh\`" || { echo "FAIL description must mention gh"; exit 1; }
+echo "$desc_line" | grep -qE '`gh`|MCP' || { echo "FAIL description must mention gh or MCP"; exit 1; }
+echo "OK  description mentions gh or MCP"
 echo "$desc_line" | grep -qi "github" || { echo "FAIL description must mention GitHub"; exit 1; }
-echo "OK  description names gh and GitHub"
+echo "OK  description names GitHub"
 
 # Required top-level sections.
 for section in \
-  "## Preflight" \
+  "## Backend selection" \
   "## Argument validation" \
   "## Untrusted-input rule" \
   "## Bot-author detection" \
