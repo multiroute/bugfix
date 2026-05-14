@@ -94,4 +94,11 @@ grep -qF "advocate **explicitly counters**" "$SKILL" || { echo "FAIL row 4 must 
 grep -qF "advocate **disputes or silent**"  "$SKILL" || { echo "FAIL row 5 must catch disputes-or-silent"; exit 1; }
 echo "OK  decision-rule rows 4 and 5 distinguish explicit-counter vs disputes-or-silent"
 
+# Lock infrastructure was removed.
+if grep -qiE "lock-acquire|lock-release|\.lock\b" "$SKILL"; then
+  echo "FAIL pr-final-review still references lock infrastructure"
+  exit 1
+fi
+echo "OK  no lock-infrastructure references"
+
 echo "PASS"
