@@ -153,4 +153,18 @@ for mcp_op in "mcp__github__create_pull_request" "mcp__github__update_pull_reque
 done
 echo "OK  MCP PR-op tools documented (create_pull_request, update_pull_request)"
 
+# MCP CI ops.
+grep -qF "mcp__github__get_pull_request_status" "$SKILL" \
+  || { echo "FAIL adapter missing MCP op: mcp__github__get_pull_request_status"; exit 1; }
+echo "OK  MCP ci_status tool documented"
+
+# MCP ci_watch must document polling behavior.
+grep -qiF "polling loop" "$SKILL" \
+  || { echo "FAIL adapter ci_watch missing 'polling loop' description for MCP backend"; exit 1; }
+echo "OK  MCP ci_watch polling loop documented"
+
+grep -qF "30" "$SKILL" \
+  || { echo "FAIL adapter ci_watch must document poll interval"; exit 1; }
+echo "OK  MCP ci_watch poll interval documented"
+
 echo "PASS"

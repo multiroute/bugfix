@@ -465,6 +465,20 @@ Concatenate output across failed runs into a single `failed_logs` string.
 - non-zero on the `pr checks` call -> `{ "error": "<stderr>" }`
 - non-zero on a per-run `run view` call -> omit that run's log but keep going; surface the issue in `failed_logs` as `<could not fetch log for run N: stderr>`.
 
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+```
+status = mcp__github__get_pull_request_status(owner=<state.owner>, repo=<state.repo>, pull_number=<pr_number>)
+```
+
+Return the same `{status, runs[]}` shape as the gh path:
+- `status` is `"success"` | `"failure"` | `"pending"`.
+- `runs[]` is `[{name, conclusion, detailsUrl}, ...]` derived from the MCP response.
+
+`<run_id>` extraction (from `detailsUrl`) follows the same regex validation as the gh path. The `run_id` is the highest-risk placeholder — see Argument validation.
+
 ### ci_watch
 
 **Signature:** `ci_watch(pr_number, timeout_minutes=120) -> {status, timed_out?}`
@@ -517,6 +531,30 @@ The agent receives a completion notification when the background process exits. 
 - gh subprocess fails with any non-CI-result error (auth, network, not-watchable) -> `{ "error": "<stderr>" }`
 
 **Difference from `ci_status`:** `ci_status` is a snapshot — returns immediately. `ci_watch` blocks. Use `ci_status` when you need to check current state; use `ci_watch` when you need to wait for terminal. The reference implementation of `ci-watchdog` calls `ci_status` once on entry (to skip the wait if CI is already terminal) and then `ci_watch` (to block until terminal).
+
+#### MCP path
+
+When `state.artifacts.adapter_backend == "mcp"`:
+
+The MCP GitHub server has no blocking watch primitive. The adapter implements polling in-skill:
+
+```
+poll_interval_seconds = 30   # hardcoded; tune in skill body if needed
+elapsed = 0
+while elapsed < <timeout_minutes> * 60:
+    snapshot = ci_status(<pr_number>)              # this op's MCP path
+    if snapshot.status == "success":
+        return {status: "success", runs: snapshot.runs}
+    if snapshot.status == "failure":
+        return {status: "failure", runs: snapshot.runs}
+    sleep poll_interval_seconds
+    elapsed += poll_interval_seconds
+return {status: "timeout", runs: snapshot.runs}
+```
+
+The polling loop runs in the caller's session (typically `ci-watchdog`'s long-running invocation). Unlike the gh path, this consumes session time proportional to CI duration. For a 60-minute CI run polled every 30 s, that's 120 status calls.
+
+The 30-second interval is hardcoded — not config-driven yet. Future tuning would add a `config.ci_poll_interval_seconds` knob (intentionally out of scope here).
 
 ### rebase_pr
 
