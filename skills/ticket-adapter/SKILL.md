@@ -22,7 +22,15 @@ At the top of every operation, check `state.artifacts.adapter_backend`:
    - **MCP first.** Look in your available toolset for `mcp__github__get_issue` (or any `mcp__github__*` tool — the canonical GitHub MCP server exposes them under this prefix). If found, set backend = `"mcp"`.
    - **gh fallback.** Run `command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1` and verify `gh --version` reports `>= 2.40` (needed for `--watch --fail-fast`). If all three pass, set backend = `"gh"`.
    - **Neither.** Return `{"error": "neither MCP GitHub nor gh CLI available — install one and retry"}`. The caller (a stage skill) decides whether to retry or escalate via `bugfix:block-and-comment(tech-failure)`.
-3. Write the chosen backend to `state.artifacts.adapter_backend` under the per-ticket lock. Subsequent operations within the same run read this cache.
+3. Write the chosen backend to `state.artifacts.adapter_backend` under the per-ticket lock. Subsequent operations within the same run read this cache. The cache lives for the lifetime of one run — a new run (fresh `state.json`, or one that has reached a `terminal` state) re-probes from scratch, so mid-run installs of MCP or gh do not affect in-flight runs but are picked up on the next run.
+
+### Per-op subsection convention
+
+Each of the 11 per-op subsections below (`### read`, `### ticket_comment`, ..., `### rebase_pr`) documents BOTH backends. The gh path is the existing default content. The MCP path appears as a `#### MCP path` subsection within each op, introduced by:
+
+> When `state.artifacts.adapter_backend == "mcp"`:
+
+The MCP path's return shape, untrusted-input wrapping, and argument validation rules are identical to the gh path — only the underlying mechanism differs. Callers (stage skills) do NOT branch on backend themselves; the adapter handles routing once per op invocation.
 
 ### gh-only preflight (when backend = gh)
 
