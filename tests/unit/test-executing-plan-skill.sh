@@ -114,4 +114,16 @@ grep -qiF "regression_test_path = null" "$SKILL" \
   || { echo "FAIL executing-plan must tolerate absent marker for improvement class"; exit 1; }
 echo "OK  improvement-class tolerates absent regression-test marker"
 
+# Task progress must be persisted to state for crash-resume.
+grep -qiF "tasks_done" "$SKILL" \
+  || { echo "FAIL executing-plan must persist task progress to state.artifacts.executing.tasks_done"; exit 1; }
+echo "OK  executing-plan persists task progress for crash-resume"
+
+# Resume logic must be documented.
+grep -qiF "resuming mid-execution" "$SKILL" \
+  || grep -qiF "skip the implementer dispatch" "$SKILL" \
+  || grep -qiF "already in the array" "$SKILL" \
+  || { echo "FAIL executing-plan must document resume-from-tasks_done logic"; exit 1; }
+echo "OK  executing-plan documents resume-from-tasks_done"
+
 echo "PASS"

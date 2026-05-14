@@ -110,4 +110,12 @@ grep -qF "you violate the loop contract" "$SKILL" \
   || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
 echo "OK  STAGE COMPLETE footer contains loop-contract directive"
 
+# In-worktree branch capture must refuse to commit to base_branch.
+grep -qiF "branch == state.base_branch" "$SKILL" \
+  || grep -qiF "branch equals state.base_branch" "$SKILL" \
+  || grep -qiF "branch matches base_branch" "$SKILL" \
+  || grep -qiF "refusing to commit" "$SKILL" \
+  || { echo "FAIL writing-plans must guard against pre-staged worktree on base_branch"; exit 1; }
+echo "OK  writing-plans guards against base_branch as working branch"
+
 echo "PASS"

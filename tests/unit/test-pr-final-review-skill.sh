@@ -130,4 +130,16 @@ grep -qF "you violate the loop contract" "$SKILL" \
   || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
 echo "OK  STAGE COMPLETE footer contains loop-contract directive"
 
+# Merge-ready PR/ticket comments must be conditional on regression_test_path.
+grep -qiF "regression_test_path" "$SKILL" \
+  || { echo "FAIL pr-final-review must reference regression_test_path for comment branching"; exit 1; }
+echo "OK  pr-final-review references regression_test_path"
+
+# Conditional handling must be documented.
+grep -qiF "omit the paragraph" "$SKILL" \
+  || grep -qiF "when regression_test_path is null" "$SKILL" \
+  || grep -qiF "rendered ONLY when" "$SKILL" \
+  || { echo "FAIL pr-final-review must document null-handling for regression_test_path"; exit 1; }
+echo "OK  pr-final-review documents conditional comment handling"
+
 echo "PASS"

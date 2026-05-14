@@ -132,6 +132,8 @@ Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins
 
    Manual merge action required: review the diff, merge if appropriate. The bugfix loop will NOT auto-merge.
    ```
+
+   **Conditional regression-test paragraph.** The `Regression test: <state.artifacts.regression_test_path>` line in the template above is rendered ONLY when `state.artifacts.regression_test_path` is non-null. When `regression_test_path` is null (improvement-class tickets without a regression test, per `bugfix:executing-plan`'s "Classification-aware Task 1 marker handling"), omit the paragraph entirely — do NOT render with `null` (or any other unrendered placeholder text) in the public PR comment. The other lines of the template are unaffected.
 7. If advocate was `conditional` OR adversary returned `important` findings: post each set of concerns as a SEPARATE PR comment via additional `pr_comment` calls, so the human reviewer sees them as discrete review items.
 8. Call `bugfix:ticket-adapter:ticket_comment(state.issue_number, <ticket merge-ready comment>)`. Template:
    ```
@@ -139,6 +141,8 @@ Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins
 
    The loop completed successfully through CI watching and final review. Please review and merge manually.
    ```
+
+   The ticket merge-ready comment template above does not reference `regression_test_path`, so the same conditional rule has no effect here. If a future revision adds a `Regression test: ...` line to this ticket template, the same rule applies: rendered ONLY when `state.artifacts.regression_test_path` is non-null; otherwise omit the paragraph entirely.
 9. Emit `pr_merge_ready` event (detail: `{advocate: "yes/conditional", adversary: "clean/important"}`).
 10. Exit.
 

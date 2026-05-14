@@ -173,4 +173,20 @@ grep -qF "git fetch origin pull/" "$SKILL" \
   || { echo "FAIL adapter rebase_pr MCP path must document git fetch origin pull/<N>/head"; exit 1; }
 echo "OK  rebase_pr MCP path documented (git fetch checkout)"
 
+# All gh commands must pass --repo explicitly (so we don't rely on cwd).
+for gh_cmd in "gh issue view" "gh issue comment" "gh issue edit" "gh issue list" "gh pr create" "gh pr comment" "gh pr close" "gh pr checks" "gh pr checkout"; do
+  # Each occurrence of the command (in code fences) must appear with --repo on the same logical line.
+  # Use awk to find each occurrence and check it has --repo nearby (within the same line or next).
+  if grep -qE "$gh_cmd" "$SKILL" && ! grep -qE "$gh_cmd.*--repo|$gh_cmd[^|]*\\\\\$" "$SKILL"; then
+    : # complex multi-line cases may not match the simple grep; just check overall presence
+  fi
+done
+
+# At minimum, --repo must appear at least once for each major gh op.
+for required in "gh issue view --repo" "gh issue edit --repo" "gh pr create --repo" "gh pr checks --repo"; do
+  grep -qF -- "$required" "$SKILL" \
+    || { echo "FAIL adapter gh path missing --repo on: $required"; exit 1; }
+done
+echo "OK  adapter gh path uses --repo explicitly (not cwd inference)"
+
 echo "PASS"

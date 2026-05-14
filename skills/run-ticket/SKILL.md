@@ -58,7 +58,7 @@ Check whether `.bugfix/runs/<ticket_id>.json` exists. If it does, the loop is re
 If the file does NOT exist, create it **atomically** using `set -o noclobber`. This prevents two concurrent `run-ticket` invocations on the same URL from both seeing "file absent" and both writing initial state.
 
 ```bash
-mkdir -p .runs
+mkdir -p .bugfix/runs
 # Atomic create — fails (non-zero exit) if the file appeared between the
 # absent-check above and this write. On collision the OTHER invocation
 # initialized the state; we simply join the loop without overwriting.

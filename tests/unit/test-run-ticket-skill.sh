@@ -89,6 +89,10 @@ echo "OK  body uses .bugfix/ runtime tree (no docs/superpowers/ refs)"
 grep -qF ".bugfix/runs/" "$SKILL" || { echo "FAIL body must reference .bugfix/runs/ state path"; exit 1; }
 echo "OK  body references .bugfix/runs/ state path"
 
+grep -qF "mkdir -p .bugfix/runs" "$SKILL" \
+  || { echo "FAIL run-ticket must create .bugfix/runs (not .runs) before state init"; exit 1; }
+echo "OK  run-ticket creates the correct .bugfix/runs parent directory"
+
 # Pin the EXACT description string so a future increment rewrite doesn't
 # silently break the user-facing trigger contract. The skill's own
 # Forward-compatibility note tells the next implementer: frontmatter

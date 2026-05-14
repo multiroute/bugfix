@@ -119,7 +119,7 @@ first_token="$(printf '%s' "$body" | sed -e 's|</\{0,1\}untrusted-input>||gI' | 
 
 Issue and PR operations take **bare integer identifiers**: `read(issue_number)`, `ticket_comment(issue_number, ...)`, `set_status(issue_number, ...)`, `open_pr(...)` returns `pr_number`, etc. Do NOT pass the plugin's structured `ticket_id` string (`<owner>-<repo>-<number>`) — `gh` does not accept that format.
 
-**Repo targeting:** the adapter assumes the agent's working directory is inside the target repo's git worktree (which `bugfix:using-git-worktrees` enforces for the autonomous loop). `gh` infers the target repo from `git remote get-url origin`. Callers that need to target a different repo MUST `cd` into that repo's worktree before invoking the adapter.
+**Repo targeting:** the adapter passes `--repo "<state.owner>/<state.repo>"` explicitly on every `gh` invocation. The state fields are initialized by `run-ticket` from the URL parse, so they're populated before any adapter op runs. Callers do NOT need to be inside the target repo's worktree for the adapter to work correctly. (Git-only ops `push` and `git rebase` inside `rebase_pr` DO need a worktree — those are invoked from inside `state.worktree_path`.)
 
 **Converting from `ticket_id` to `issue_number`:** the bugfix plugin's structured `ticket_id` is `<owner>-<repo>-<number>`. Extract `<number>` as the trailing run of digits. The caller is responsible for this; the adapter consumes only the integer.
 
@@ -136,7 +136,7 @@ Each operation has the same shape: signature, gh command (or git for `push`), ou
 **gh command:**
 
 ```bash
-gh issue view "<issue_number>" --json title,body,state,labels,comments
+gh issue view --repo "<state.owner>/<state.repo>" "<issue_number>" --json title,body,state,labels,comments
 ```
 
 **Output parsing:** parse stdout as JSON. Remap `state` -> `status` (values: `open` | `closed`). For each comment, capture `author.login`, `authorAssociation`, `body`, `createdAt`; derive `is_bot` per Bot-author detection above.
@@ -187,7 +187,7 @@ On any MCP error (tool unavailable, network, permission), return `{"error": "<me
 **gh command:** body via stdin to avoid shell-escaping pitfalls.
 
 ```bash
-gh issue comment "<issue_number>" --body-file -
+gh issue comment --repo "<state.owner>/<state.repo>" "<issue_number>" --body-file -
 # pipe the comment body to stdin
 ```
 
@@ -227,7 +227,7 @@ Return `{"comment_id": <result.id>}`. The MCP server returns the comment's numer
 # the adapter MUST swallow that specific error and only escalate on other failures.
 ensure_label() {
   local name="$1" color="$2" desc="$3"
-  gh label create "$name" --color "$color" --description "$desc" 2>&1 \
+  gh label create --repo "<state.owner>/<state.repo>" "$name" --color "$color" --description "$desc" 2>&1 \
     | grep -qiE "already exists|not found" || true
   # If `gh label create` succeeded, fine. If it failed with "already exists",
   # also fine (the label is there). If it failed for any other reason (auth,
@@ -246,7 +246,7 @@ This block runs at the top of every `set_status` invocation. The cost is four ch
 
 ```bash
 # Example: status="in-progress" — remove all three non-target labels.
-gh issue edit "<issue_number>" \
+gh issue edit --repo "<state.owner>/<state.repo>" "<issue_number>" \
   --add-label "bugfix-status:in-progress" \
   --remove-label "bugfix-status:needs-info" \
   --remove-label "bugfix-status:rejected" \
@@ -292,7 +292,7 @@ Return `{"ok": true}`. If `mcp__github__create_label` is not exposed by the MCP 
 **gh command:**
 
 ```bash
-gh issue list --label "<label>" --state open --json number,title
+gh issue list --repo "<state.owner>/<state.repo>" --label "<label>" --state open --json number,title
 ```
 
 **Output parsing:** parse JSON array, emit `[.[].number]`.
@@ -336,7 +336,7 @@ git push -u origin "<branch>"
 **gh command:** body via stdin.
 
 ```bash
-gh pr create --base "<base>" --head "<branch>" --title "<title>" --body-file -
+gh pr create --repo "<state.owner>/<state.repo>" --base "<base>" --head "<branch>" --title "<title>" --body-file -
 # pipe the PR body to stdin
 ```
 
@@ -367,7 +367,7 @@ Same title/body validation rules apply (length cap, control-char stripping).
 **gh command:** body via stdin.
 
 ```bash
-gh pr comment "<pr_number>" --body-file -
+gh pr comment --repo "<state.owner>/<state.repo>" "<pr_number>" --body-file -
 # pipe the comment body to stdin
 ```
 
@@ -395,11 +395,11 @@ GitHub treats PR comments as issue comments at the REST/API level, so the same o
 
 ```bash
 # Step 1: post the closing reason as a PR comment (via stdin to avoid shell escaping).
-gh pr comment "<pr_number>" --body-file -
+gh pr comment --repo "<state.owner>/<state.repo>" "<pr_number>" --body-file -
 # pipe the reason text to stdin
 
 # Step 2: close the PR.
-gh pr close "<pr_number>"
+gh pr close --repo "<state.owner>/<state.repo>" "<pr_number>"
 ```
 
 **Output parsing:** none beyond exit code.
@@ -425,7 +425,7 @@ Return `{"ok": true}`. If `update_pull_request` is not exposed by the MCP server
 **gh command (primary):**
 
 ```bash
-gh pr checks "<pr_number>" --json name,status,conclusion,detailsUrl
+gh pr checks --repo "<state.owner>/<state.repo>" "<pr_number>" --json name,status,conclusion,detailsUrl
 ```
 
 **Output parsing:** parse JSON. Aggregate across runs:
@@ -443,7 +443,7 @@ gh pr checks "<pr_number>" --json name,status,conclusion,detailsUrl
 **Failed-logs sub-call (only when status == failure):** for each failed run, extract the run id from `detailsUrl` — it's the path segment immediately following `/runs/` (NOT the trailing segment, which is the job id). For URL `https://github.com/owner/repo/actions/runs/12345/job/67890`, the run id is `12345`. Then:
 
 ```bash
-gh run view "<run_id>" --log-failed
+gh run view --repo "<state.owner>/<state.repo>" "<run_id>" --log-failed
 ```
 
 Concatenate output across failed runs into a single `failed_logs` string.
@@ -491,7 +491,7 @@ A blocking variant of `ci_status` that returns only when CI reaches a terminal v
 
 ```bash
 # 120-minute hard ceiling enforced by /usr/bin/env timeout (or the GNU `timeout` binary on Linux).
-timeout "<timeout_minutes>m" gh pr checks "<pr_number>" --watch --fail-fast --interval 60
+timeout "<timeout_minutes>m" gh pr checks --repo "<state.owner>/<state.repo>" "<pr_number>" --watch --fail-fast --interval 60
 ```
 
 `gh pr checks --watch` blocks until every check reports a terminal conclusion. `--fail-fast` exits as soon as any check fails. `--interval 60` matches the 60-second poll cadence the prior implementation used. The outer `timeout` enforces the hard ceiling so a stuck CI run can't pin the agent indefinitely.
@@ -499,7 +499,7 @@ timeout "<timeout_minutes>m" gh pr checks "<pr_number>" --watch --fail-fast --in
 **Recommended invocation pattern (caller side):**
 
 ```
-Bash(command="timeout 120m gh pr checks 260 --watch --fail-fast --interval 60",
+Bash(command="timeout 120m gh pr checks --repo <state.owner>/<state.repo> 260 --watch --fail-fast --interval 60",
      run_in_background=true,
      description="Watch PR #260 CI checks until terminal")
 ```
@@ -563,7 +563,7 @@ The 30-second interval is hardcoded — not config-driven yet. Future tuning wou
 **Command sequence:**
 
 ```bash
-gh pr checkout "<pr_number>"
+gh pr checkout --repo "<state.owner>/<state.repo>" "<pr_number>"
 git fetch origin "<base>"
 git rebase "origin/<base>"
 # If rebase succeeds AND `git status` shows no conflicts:
