@@ -326,14 +326,20 @@ Done!
 
 Task 1 of every bug-fix plan creates the failing regression test (per `bugfix:writing-plans`'s `reproduce-bug-first` rule). When Task 1's implementer reports DONE and both reviews pass, record the test file path so downstream stages can find it.
 
-**Source of truth: the plan declares the path explicitly.** `bugfix:writing-plans` requires Task 1 to include a leading `**Regression test file:** <path>` declaration line. The path is read from that declaration, NOT inferred from `git diff` — the diff heuristic was fragile when Task 1 touched multiple files (e.g., a new test in `tests/foo_test.py` AND an extension to `tests/conftest.py`).
+**Source of truth: the plan declares the path explicitly.** `bugfix:writing-plans` requires bug-class Task 1 to include a leading `**Regression test file:** <path>` declaration line. The path is read from that declaration, NOT inferred from `git diff` — the diff heuristic was fragile when Task 1 touched multiple files (e.g., a new test in `tests/foo_test.py` AND an extension to `tests/conftest.py`).
+
+### Classification-aware Task 1 marker handling
+
+The handling of the `**Regression test file:** <path>` marker branches on `state.artifacts.intake_classification` (set by `bugfix:ticket-intake`):
 
 1. Read `.bugfix/runs/<ticket-id>.json`.
-2. Parse the Task 1 section of `state.plan_path` for a line matching `^\*\*Regression test file:\*\* (.+)$`. If absent: this is a plan-format error — exit via `bugfix:block-and-comment(tech-failure, reason="Task 1 missing Regression test file declaration")`. If multiple matches: take the first; warn in the event log.
-3. Set `state.artifacts.regression_test_path = "<declared path>"`. Use a worktree-relative path so the value works across host filesystems.
+2. Parse the Task 1 section of `state.plan_path` for a line matching `^\*\*Regression test file:\*\* (.+)$`.
+3. Branch:
+   - **When `state.artifacts.intake_classification == "bug"`:** the marker is REQUIRED. If present, set `state.artifacts.regression_test_path = "<declared path>"` (worktree-relative). If absent: this is a plan-format error — exit via `bugfix:block-and-comment(tech-failure, reason="Task 1 missing Regression test file declaration")`. If multiple matches: take the first; warn in the event log.
+   - **When `state.artifacts.intake_classification == "improvement"`:** the marker is OPTIONAL. Some improvement plans DO add a test as Task 1 (and the declaration line is still the canonical source). Try-parse the marker: if present, set `state.artifacts.regression_test_path = "<declared path>"`. If absent, set `state.artifacts.regression_test_path = null` and continue. Do NOT tech-failure block — improvement plans legitimately may not have a regression test, and downstream consumers honor a null path.
 4. Write state back. Continue to Task 2.
 
-This field is consumed by `bugfix:autonomous-finishing` (PR body template references it), `bugfix:ci-watchdog` (fix sub-agent must not weaken this test), and `bugfix:pr-final-review` (advocate runs the regression test on both base and PR tip). If you skip this write, those downstream stages have no path to run the test from — silent breakage.
+This field is consumed by `bugfix:autonomous-finishing` (PR body template renders the regression-test paragraph only when the path is non-null), `bugfix:ci-watchdog` (fix sub-agent must not weaken this test when the path is set; otherwise must not weaken existing test coverage broadly), and `bugfix:pr-final-review` (advocate runs the regression test on both base and PR tip when the path is set). If you skip this write for a bug, those downstream stages have no path to run the test from — silent breakage.
 
 ## State advance on completion
 

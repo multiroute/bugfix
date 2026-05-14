@@ -21,7 +21,7 @@ This skill is invoked by `bugfix:resume-run` when `state.current_stage == "pr-re
 ## Step 1: Rebase
 
 Call `bugfix:ticket-adapter:rebase_pr(state.pr_number, state.base_branch)`. The adapter handles:
-- `gh pr checkout` to switch the worktree to the PR's branch.
+- Checks out the PR branch into the worktree — `gh pr checkout <pr_number>` for the gh backend, `git fetch origin pull/<pr_number>/head` (plus a local branch checkout) for the MCP backend; the adapter routes automatically on `state.artifacts.adapter_backend`.
 - `git fetch origin <base_branch>` to refresh.
 - `git rebase origin/<base_branch>`.
 - Conflict detection via `git diff --name-only --diff-filter=U` (catches all unmerged states).

@@ -64,4 +64,9 @@ grep -qF "Improve:" "$SKILL" \
   || { echo "FAIL autonomous-finishing must document 'Improve:' prefix"; exit 1; }
 echo "OK  'Improve:' prefix documented"
 
+# PR body regression-test paragraph must be conditional on regression_test_path.
+grep -qiF "regression_test_path" "$SKILL" \
+  || { echo "FAIL autonomous-finishing must reference regression_test_path for PR body branching"; exit 1; }
+echo "OK  PR body regression-test paragraph is conditional"
+
 echo "PASS"

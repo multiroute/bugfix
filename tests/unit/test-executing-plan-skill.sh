@@ -91,4 +91,20 @@ grep -qF "you violate the loop contract" "$SKILL" \
   || { echo "FAIL STAGE COMPLETE footer missing 'violate the loop contract' directive"; exit 1; }
 echo "OK  STAGE COMPLETE footer contains loop-contract directive"
 
+# Classification-aware Task 1 marker handling.
+grep -qF "intake_classification" "$SKILL" \
+  || { echo "FAIL executing-plan must branch on intake_classification for Task 1 marker"; exit 1; }
+echo "OK  executing-plan branches on intake_classification"
+
+# Bug-class still requires the marker (existing behavior).
+grep -qF "Regression test file" "$SKILL" \
+  || { echo "FAIL executing-plan must still document Regression test file marker for bugs"; exit 1; }
+echo "OK  Regression test file marker documented (bug class)"
+
+# Improvement-class tolerates absence.
+grep -qiF "regression_test_path = null" "$SKILL" \
+  || grep -qiF "regression_test_path = None" "$SKILL" \
+  || { echo "FAIL executing-plan must tolerate absent marker for improvement class"; exit 1; }
+echo "OK  improvement-class tolerates absent regression-test marker"
+
 echo "PASS"

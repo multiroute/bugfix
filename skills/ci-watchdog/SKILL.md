@@ -104,15 +104,17 @@ Construct the task description for the sub-agent by combining:
 - **Failed logs:** the `failed_logs` field returned by `ci_status` (already wrapped where appropriate by the adapter).
 - **Recent commit context:** output of `git log -5 --oneline` from inside the worktree.
 - **Plan reference:** path to `state.plan_path` for the sub-agent to consult if it needs to understand the surrounding work.
-- **Regression-test invariant (mandatory):** path to `state.artifacts.regression_test_path` AND an explicit instruction: *"This is the regression test for the original bug. It MUST continue to FAIL on `state.base_sha` and PASS on the PR tip. If your CI fix would touch this file at all, STOP and report BLOCKED — weakening or reverting the regression test is never an acceptable CI fix. Find a fix that keeps the regression test green on the tip."* Without this rule, a fix sub-agent could green CI by reverting the regression test undetected.
+- **Regression-test invariant (conditional on `state.artifacts.regression_test_path`):**
+  - **When `state.artifacts.regression_test_path` is non-null** (typical for bug fixes; set by `executing-plan` when the plan's Task 1 declared a regression test file): pass the path AND an explicit instruction: *"This is the regression test for the original bug. It MUST continue to FAIL on `state.base_sha` and PASS on the PR tip. If your CI fix would touch this file at all, STOP and report BLOCKED — weakening or reverting the regression test is never an acceptable CI fix. Find a fix that keeps the regression test green on the tip."* Without this rule, a fix sub-agent could green CI by reverting the regression test undetected.
+  - **When `state.artifacts.regression_test_path` is null** (typical for improvement plans that did not include a Task 1 regression test): omit the path-specific invariant and replace it with a softer instruction: *"This PR does not have a designated regression test. Your CI fix MUST NOT weaken existing test coverage — do not delete, skip, or relax assertions in any existing test file to make CI green. If the only way to green CI is to weaken a test, STOP and report BLOCKED."*
 
 The sub-agent's job:
 
 1. Read the logs, identify the root cause.
-2. Apply a minimal targeted fix inside the worktree. The fix MUST NOT touch `state.artifacts.regression_test_path` — if it would, signal BLOCKED instead.
-3. Run the affected tests locally to confirm the fix works AND the regression test still passes on the tip.
+2. Apply a minimal targeted fix inside the worktree. If `state.artifacts.regression_test_path` is non-null, the fix MUST NOT touch that file — signal BLOCKED if it would. If `state.artifacts.regression_test_path` is null, the fix MUST NOT weaken existing test coverage (no deletions, skips, or relaxed assertions in existing tests) — signal BLOCKED if the only viable path requires weakening coverage.
+3. Run the affected tests locally to confirm the fix works AND (when set) the regression test still passes on the tip.
 4. Commit with a message starting `fix(ci): <short description>` so the commit history makes the fix attempt visible.
-5. Signal `DONE` (or `BLOCKED` / `NEEDS_CONTEXT` if it can't proceed without touching the regression test or for any other reason).
+5. Signal `DONE` (or `BLOCKED` / `NEEDS_CONTEXT` if it can't proceed without touching the regression test, weakening coverage, or for any other reason).
 
 After sub-agent reports `DONE`:
 

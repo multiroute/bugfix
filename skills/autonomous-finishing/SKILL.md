@@ -64,6 +64,13 @@ The failing-test-first task from the plan (Task 1) added a regression test at: `
 🤖 Opened by bugfix autonomous loop. CI watching and parallel advocate + adversary final review run next; this comment will be supplemented with their verdicts before merge-ready.
 ```
 
+### Conditional regression-test paragraph
+
+The `## Regression test` section in the template above is rendered ONLY when `state.artifacts.regression_test_path` is non-null. This field is set by `executing-plan` from the `**Regression test file:**` declaration in Task 1; bug-class plans always have it, but improvement-class plans may legitimately omit a regression test (see `bugfix:executing-plan`'s "Classification-aware Task 1 marker handling").
+
+- **When `state.artifacts.regression_test_path` is non-null** (typical for bug PRs): include the paragraph as shown, substituting `<test path>` with `state.artifacts.regression_test_path` and `<base_sha>` with `state.base_sha`.
+- **When `state.artifacts.regression_test_path` is null** (typical for improvement PRs without a regression test): OMIT the entire `## Regression test` heading and its paragraph from the rendered PR body. Do NOT render with empty placeholders — literal `<test path>` text leaking into a PR body is a bug. The other sections (`## What changed`, `## Why`, `## Plan and review history`) are unaffected.
+
 ### PR title prefix
 
 The PR title prefix is derived from `state.artifacts.intake_classification`:
