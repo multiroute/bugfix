@@ -339,7 +339,7 @@ The handling of the `**Regression test file:** <path>` marker branches on `state
    - **When `state.artifacts.intake_classification == "improvement"`:** the marker is OPTIONAL. Some improvement plans DO add a test as Task 1 (and the declaration line is still the canonical source). Try-parse the marker: if present, set `state.artifacts.regression_test_path = "<declared path>"`. If absent, set `state.artifacts.regression_test_path = null` and continue. Do NOT tech-failure block — improvement plans legitimately may not have a regression test, and downstream consumers honor a null path.
 4. Write state back. Continue to Task 2.
 
-This field is consumed by `bugfix:autonomous-finishing` (PR body template renders the regression-test paragraph only when the path is non-null), `bugfix:ci-watchdog` (fix sub-agent must not weaken this test when the path is set; otherwise must not weaken existing test coverage broadly), and `bugfix:pr-final-review` (advocate runs the regression test on both base and PR tip when the path is set). If you skip this write for a bug, those downstream stages have no path to run the test from — silent breakage.
+This field is consumed by `bugfix:autonomous-finishing` (PR body template renders the regression-test paragraph only when the path is non-null), `bugfix:ci-watchdog` (fix sub-agent must not weaken this test when the path is set; otherwise must not weaken existing test coverage broadly), and `bugfix:pr-final-review` (the reviewer runs the regression test on both base and PR tip when the path is set and `config.pr_review.reviewer_must_run_regression_test` is true). If you skip this write for a bug, those downstream stages have no path to run the test from — silent breakage.
 
 ## State advance on completion
 

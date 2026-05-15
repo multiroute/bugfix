@@ -28,7 +28,6 @@
   "artifacts": {
     "intake_classification": "bug",
     "regression_test_path": "tests/test_bug_1234.py",
-    "advocate_verdict": null,
-    "adversary_verdict": null
+    "review_verdict": null
   }
 }

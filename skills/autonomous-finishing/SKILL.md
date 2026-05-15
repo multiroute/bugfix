@@ -60,7 +60,7 @@ The failing-test-first task from the plan (Task 1) added a regression test at: `
 - Plan: `<state.plan_path>`
 - Final code-reviewer pass: clean (per executing-plan's final review step)
 
-🤖 Opened by bugfix autonomous loop. CI watching and parallel advocate + adversary final review run next; this comment will be supplemented with their verdicts before merge-ready.
+🤖 Opened by bugfix autonomous loop. CI watching and a calibrated final review run next; this comment will be supplemented with the reviewer's verdict before merge-ready.
 ```
 
 ### Conditional regression-test paragraph
@@ -86,7 +86,7 @@ The ticket comment uses a shorter template (substitute `<pr_url>` with the const
 ```
 PR opened: <pr_url>
 
-The bugfix autonomous loop has executed the plan and opened a PR. CI watching and the PR-level final review (parallel advocate + adversary) run automatically next; you'll see another comment when the loop reaches a terminal verdict.
+The bugfix autonomous loop has executed the plan and opened a PR. CI watching and the PR-level final review (single calibrated reviewer) run automatically next; you'll see another comment when the loop reaches a terminal verdict.
 ```
 
 ## State writes

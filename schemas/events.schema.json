@@ -16,7 +16,7 @@
         "task_started", "task_spec_review_failed", "task_code_quality_review_failed", "task_done",
         "pr_pushed", "pr_opened",
         "ci_failed", "ci_green", "ci_fix_attempted",
-        "pr_rebased", "pr_review_started", "pr_review_blocked", "pr_merge_ready", "pr_closed",
+        "pr_rebased", "pr_review_started", "pr_merge_ready", "pr_closed",
         "block_and_comment", "resumed"
       ]
     },

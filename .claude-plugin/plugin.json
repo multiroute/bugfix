@@ -1,6 +1,6 @@
 {
   "name": "bugfix",
-  "description": "Autonomous bug-fix loop as a Claude skills plugin. Ticket to merge-ready PR with spec-compliance review, code-quality review, mandatory regression-test-first plan, CI watchdog, and parallel advocate + adversary final PR review.",
+  "description": "Autonomous bug-fix loop as a Claude skills plugin. Ticket to merge-ready PR with spec-compliance review, code-quality review, mandatory regression-test-first plan, CI watchdog, and a calibrated final PR review.",
   "version": "0.7.0",
   "author": {
     "name": "Artur",

@@ -1,13 +1,13 @@
 ---
 name: pr-final-review
-description: Use as the terminal stage of the autonomous bug-fix loop. Rebases the PR on top of base_branch, dispatches advocate + adversary reviewers in parallel, applies the decision rule, terminates the loop as merge-ready, pr-closed, or blocks for human resolution. Dispatched by `bugfix:run-ticket` when `state.current_stage == "pr-reviewing"`.
+description: Use as the terminal stage of the autonomous bug-fix loop. Rebases the PR on top of base_branch, dispatches a single calibrated reviewer, applies the decision rule, terminates the loop as merge-ready or pr-closed. Dispatched by `bugfix:run-ticket` when `state.current_stage == "pr-reviewing"`.
 ---
 
 # bugfix:pr-final-review
 
-Terminal stage of the autonomous loop. Rebases the PR on `base_branch`, dispatches an advocate and an adversary reviewer in parallel, applies a 6-row decision rule, and produces one of three outcomes: `merge-ready` (terminal), `pr-closed` (terminal), or `block-and-comment(needs-info)` (human resolves).
+Terminal stage of the autonomous loop. Rebases the PR on `base_branch`, dispatches a single calibrated reviewer, applies a 3-row decision rule keyed on the reviewer's verdict tier, and produces one of two outcomes: `merge-ready` (terminal) or `pr-closed` (terminal). Tech-failures route to `block-and-comment(tech-failure)`.
 
-**This stage never auto-retries.** PR-level rejections in public are visible flailing; a fix-and-re-review loop on a public PR creates a confusing trail. Outcomes here are final-or-blocked.
+**This stage never auto-retries.** PR-level rejections in public are visible flailing; a fix-and-re-review loop on a public PR creates a confusing trail. Outcomes here are final.
 
 ## State-file-first context
 
@@ -30,9 +30,9 @@ Outcomes:
 - `{success: true}` → emit `pr_rebased` event (detail: `{}`); proceed to Step 2.
 - `{success: false, conflicts: [...]}` → exit via `bugfix:block-and-comment(tech-failure, reason="cross-ticket conflict on rebase", artifacts=[conflicts])`. The adapter already ran `git rebase --abort` so the worktree is clean. Do NOT attempt auto-resolution.
 
-## Step 2: Gather inputs for reviewers
+## Step 2: Gather inputs for the reviewer
 
-Read these into structured variables for substitution into the reviewer prompts:
+Read these into structured variables for substitution into the reviewer prompt:
 
 - **ticket_body:** call `bugfix:ticket-adapter:read(state.issue_number)`; extract `body` (which the adapter has already wrapped in `<untrusted-input>` tags). Do NOT strip the tags.
 - **spec_contents:** `cat state.spec_path`.
@@ -42,9 +42,9 @@ Read these into structured variables for substitution into the reviewer prompts:
 - **regression_test_contents:** `cat <regression_test_path>` (if the path is non-empty).
 - **base_sha:** `state.base_sha`.
 - **pr_branch:** `state.branch`.
-- **ci_summary:** call `bugfix:ticket-adapter:ci_status(state.pr_number)`; expect `{status: "success", runs: [...]}` since `ci-watchdog` already confirmed green. **If `ci_summary.status != "success"`, exit via `bugfix:block-and-comment(tech-failure, reason="CI regressed between ci-watchdog and pr-final-review", artifacts=[ci_summary])` — do NOT proceed to reviewer dispatch.** Otherwise summarize as text for the reviewer prompts.
+- **ci_summary:** call `bugfix:ticket-adapter:ci_status(state.pr_number)`; expect `{status: "success", runs: [...]}` since `ci-watchdog` already confirmed green. **If `ci_summary.status != "success"`, exit via `bugfix:block-and-comment(tech-failure, reason="CI regressed between ci-watchdog and pr-final-review", artifacts=[ci_summary])` — do NOT proceed to reviewer dispatch.** Otherwise summarize as text for the reviewer prompt.
 
-Emit `pr_review_started` event (detail: `{adversary_enabled: <bool>}`).
+Emit `pr_review_started` event (detail: `{}`).
 
 ### Diff retrieval by adapter backend
 
@@ -53,11 +53,11 @@ Reviewers get the PR diff by calling the right tool for the active backend:
 - **When `state.artifacts.adapter_backend == "gh"`:** invoke `gh pr diff <state.pr_number>` via Bash. The output is plain unified diff.
 - **When `state.artifacts.adapter_backend == "mcp"`:** call `mcp__github__get_pull_request_files(owner=<state.owner>, repo=<state.repo>, pull_number=<state.pr_number>)` for the file list, then `mcp__github__get_pull_request_diff` (or the canonical MCP server's equivalent) for the unified diff body. Concatenate into the same format as the gh output.
 
-Both paths produce the same input shape for the reviewer prompts. Reviewers SHOULD NOT branch on backend themselves — this skill handles the routing once before dispatching.
+Both paths produce the same input shape for the reviewer prompt. The reviewer SHOULD NOT branch on backend itself — this skill handles the routing once before dispatching.
 
 ### Reviewer prompt branching by classification
 
-Both the advocate and adversary reviewer prompts include a classification-specific "what to look for" section. Read `state.artifacts.intake_classification` and use the matching block:
+The reviewer prompt includes both classification-specific "what to look for" blockquotes below. The reviewer reads `state.artifacts.intake_classification` from the spec and applies the matching block:
 
 **When `intake_classification == "bug"`:**
 
@@ -73,59 +73,48 @@ Both the advocate and adversary reviewer prompts include a classification-specif
 > - Is new behavior covered by tests? If not, is the absence of coverage justified?
 > - Is the change free of regressions — do existing tests still pass, and are there obvious behaviors the diff might silently change?
 
-The advocate and adversary use the same branching block; the difference between the two reviewers is their stance (advocate: probable PASS, looks for "is this defensible?"; adversary: probable FAIL, looks for "what would make me close this?").
+## Step 3: Dispatch the reviewer
 
-## Step 3: Dispatch advocate + adversary in parallel
+Invoke a single sub-agent with the prompt template `bugfix/skills/_prompts/pr-final-reviewer-prompt.md`. Substitute `<<<TICKET_BODY>>>`, `<<<SPEC_CONTENTS>>>`, `<<<PLAN_CONTENTS>>>`, `<<<DIFF>>>`, `<<<REGRESSION_TEST_PATH>>>`, `<<<BASE_SHA>>>`, `<<<PR_BRANCH>>>`, `<<<CI_SUMMARY>>>` with the values gathered in Step 2.
 
-Use the vendored `bugfix:dispatching-parallel-agents` skill to dispatch both reviewers concurrently.
+If `config.pr_review.reviewer_must_run_regression_test == false`, instruct the sub-agent (via an additional line appended to the substituted prompt) to skip the empirical regression-test check. The reviewer's prompt already documents that opting out is acceptable and is not a finding. Default: `true` (the reviewer runs the test on both base and PR tip via `git checkout <<<BASE_SHA>>>` then `git checkout <<<PR_BRANCH>>>`; the test must FAIL on base and PASS on PR tip).
 
-**Advocate:**
-- Prompt: `bugfix/skills/_prompts/pr-final-reviewer-advocate-prompt.md`.
-- Substitute `<<<TICKET_BODY>>>`, `<<<SPEC_CONTENTS>>>`, `<<<PLAN_CONTENTS>>>`, `<<<DIFF>>>`, `<<<REGRESSION_TEST_PATH>>>`, `<<<BASE_SHA>>>`, `<<<PR_BRANCH>>>`, `<<<CI_SUMMARY>>>` with the gathered values.
-- If `config.pr_review.advocate_must_run_regression_test` is `false` (operator override), the prompt's regression-test verification clause is moot but the advocate runs anyway; it will skip the empirical check if the config says so. Default: `true` (advocate runs the test both ways).
+Wait for the verdict. Store the full reviewer output at `state.artifacts.review_verdict` as a JSON-stringified text blob.
 
-**Adversary:**
-- Prompt: `bugfix/skills/_prompts/pr-final-reviewer-adversary-prompt.md`.
-- Same substitutions.
-- **Skip the adversary entirely if `config.pr_review.adversary_enabled == false`.** In that case, dispatch ONLY the advocate. For decision-rule purposes, treat adversary verdict as `clean`.
-
-Wait for both verdicts (or only advocate's if adversary disabled). Store at `state.artifacts.advocate_verdict` and `state.artifacts.adversary_verdict` (as JSON-stringified text, or `null` for skipped adversary).
+If the sub-agent dispatch itself fails (host error, timeout, no output), exit via `bugfix:block-and-comment(tech-failure, reason="reviewer dispatch failed", artifacts=[<host error>])`. Do NOT proceed to Step 4 without a verdict.
 
 ## Step 4: Apply decision rule
 
-Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins.
+Parse the first non-header line of the reviewer's `## Verdict` section. It matches exactly one of three forms: `Critical findings: [...]`, `Important findings: [...]`, or `clean`. Apply this table:
 
-| Advocate | Adversary | Action |
-|---|---|---|
-| `Ready: yes` | `clean` | Terminal: `merge-ready`. |
-| `Ready: conditional` | `clean` | Terminal: `merge-ready` with advocate's conditional concerns posted as a separate PR comment for the human reviewer. |
-| `Ready: yes`/`conditional` | `important` (no `critical`) | If `config.pr_review.important_findings_block == true`: treat as `critical` → close + block. Else: Terminal: `merge-ready` with advocate's concerns (if any) AND adversary's important findings posted as separate PR comments. |
-| any | `critical`, advocate **explicitly counters** | Close PR via `ticket-adapter:pr_close`; `block-and-comment(rejected)`. (Both reviewers agree something is fundamentally wrong: the adversary found it and the advocate, having seen the same diff, did not push back.) |
-| `Ready: yes`/`conditional` | `critical`, advocate **disputes or silent** | `block-and-comment(needs-info)` with both verdicts. PR stays open. Human decides. |
-| `Ready: no` | any | `block-and-comment(needs-info)` with advocate's "no" reasoning. PR stays open. |
+| Reviewer verdict | Action |
+|---|---|
+| `clean` | Terminal: `merge-ready`. |
+| `important` (no `critical`) | If `config.pr_review.important_findings_block == true`: close PR + `block-and-comment(rejected)` with reason "important findings promoted to blocking via `important_findings_block` config." Else: Terminal: `merge-ready`, with each important finding posted as a separate PR comment after the main merge-ready comment. |
+| `critical` | Close PR via `ticket-adapter:pr_close`; `block-and-comment(rejected)` with the reviewer's critical findings verbatim as the close reason. |
 
-**"Advocate explicitly counters" determination:** the advocate text must contain an explicit acknowledgment of the adversary's specific `critical` findings AND an argument that those findings are valid blockers. **Silence on those findings is NOT consent** — under parallel dispatch the advocate writes its verdict without seeing the adversary's, so silence is uninformative. Default behavior when the advocate text does not address the adversary's findings: route to `block-and-comment(needs-info)` (row 5), not auto-close (row 4). The "explicitly counters" branch fires only when the advocate's text directly engages with the adversary's findings and confirms them as blockers. This is the conservative reading: auto-close is restricted to the rare case of explicit advocate-side confirmation; everything else asks a human.
+There is no `needs-info` terminal action from this stage — that path was driven by inter-reviewer disagreement and is removed with the single-reviewer design. Tech-failure exits in Step 1 (rebase conflict), Step 2 (CI regression), and Step 3 (dispatch failure) are unchanged and route to `block-and-comment(tech-failure)`.
 
 ## Step 5: Apply terminal action
 
+Two branches only.
+
 ### Branch A: `merge-ready`
+
+Taken when the verdict is `clean`, or `important` with `important_findings_block=false`.
 
 **Order matters here.** `set_status("ready-for-merge")` runs FIRST so a label-missing failure is surfaced before any state mutations or public PR comments. If `set_status` fails, the ticket has no merge-ready signal posted anywhere — operator fixes the label and the loop can re-enter cleanly.
 
 1. Call `bugfix:ticket-adapter:set_status(state.issue_number, "ready-for-merge")`. If `set_status` returns "label not found", exit via `bugfix:block-and-comment(tech-failure, reason="bugfix-status:ready-for-merge label missing — run first-run setup")`. Do NOT proceed; do NOT set `state.terminal` yet; do NOT post PR comments.
 2. Set `state.terminal = "merge-ready"`.
-3. Set `state.artifacts.advocate_verdict = <advocate output text>`.
-4. Set `state.artifacts.adversary_verdict = <adversary output text, or "skipped" if disabled>`.
-5. Set `state.updated_at = <now>`.
-6. Call `bugfix:ticket-adapter:pr_comment(state.pr_number, <merge-ready comment>)`. Comment template:
+3. Set `state.artifacts.review_verdict = <reviewer output text>`.
+4. Set `state.updated_at = <now>`.
+5. Call `bugfix:ticket-adapter:pr_comment(state.pr_number, <merge-ready comment>)`. Comment template:
    ```
    bugfix loop reached `merge-ready` for this PR.
 
-   Advocate verdict: <Ready: yes | conditional>
-   <advocate reasoning summary>
-
-   Adversary verdict: <clean | important>
-   <adversary summary if non-clean>
+   Reviewer verdict: <clean | important>
+   <reviewer summary>
 
    CI: green (per ci-watchdog)
    Regression test: <state.artifacts.regression_test_path>
@@ -134,8 +123,8 @@ Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins
    ```
 
    **Conditional regression-test paragraph.** The `Regression test: <state.artifacts.regression_test_path>` line in the template above is rendered ONLY when `state.artifacts.regression_test_path` is non-null. When `regression_test_path` is null (improvement-class tickets without a regression test, per `bugfix:executing-plan`'s "Classification-aware Task 1 marker handling"), omit the paragraph entirely — do NOT render with `null` (or any other unrendered placeholder text) in the public PR comment. The other lines of the template are unaffected.
-7. If advocate was `conditional` OR adversary returned `important` findings: post each set of concerns as a SEPARATE PR comment via additional `pr_comment` calls, so the human reviewer sees them as discrete review items.
-8. Call `bugfix:ticket-adapter:ticket_comment(state.issue_number, <ticket merge-ready comment>)`. Template:
+6. If the verdict is `important`: post each important finding as a SEPARATE PR comment via additional `pr_comment` calls, so the human reviewer sees them as discrete review items.
+7. Call `bugfix:ticket-adapter:ticket_comment(state.issue_number, <ticket merge-ready comment>)`. Template:
    ```
    bugfix loop reached `merge-ready` for PR #<state.pr_number> (<pr_url>).
 
@@ -143,52 +132,51 @@ Apply the 6-row table verbatim. Rows are checked top-to-bottom; first match wins
    ```
 
    The ticket merge-ready comment template above does not reference `regression_test_path`, so the same conditional rule has no effect here. If a future revision adds a `Regression test: ...` line to this ticket template, the same rule applies: rendered ONLY when `state.artifacts.regression_test_path` is non-null; otherwise omit the paragraph entirely.
-9. Emit `pr_merge_ready` event (detail: `{advocate: "yes/conditional", adversary: "clean/important"}`).
-10. Exit.
+8. Emit `pr_merge_ready` event (detail: `{verdict: "clean" | "important"}`).
+9. Exit.
 
 ### Branch B: `pr-closed`
+
+Taken when the verdict is `critical`, or `important` with `important_findings_block=true` (the knob promotes the verdict to blocking).
 
 **Order matters here too.** The `pr_closed` event must land in the JSONL log BEFORE the `block_and_comment` event so the timeline reads close-then-block. Sequence:
 
 1. Set `state.terminal = "pr-closed"`.
-2. Set verdict artifacts.
+2. Set `state.artifacts.review_verdict = <reviewer output text>`.
 3. Set `state.updated_at = <now>`.
-4. Call `bugfix:ticket-adapter:pr_close(state.pr_number, <close reason from adversary's critical findings>)`. The adapter posts the reason as a PR comment via `pr_comment --body-file -` then closes (per ticket-adapter §5.8 two-step).
-5. Emit `pr_closed` event (detail: `{advocate: "...", adversary_critical: <count>}`) BEFORE the next step — the JSONL events log must show pr_closed preceding block_and_comment.
-6. Invoke `bugfix:block-and-comment(rejected, reason="adversary identified critical issues; advocate agreed (or silent)", questions=[], artifacts=[{label: "advocate_verdict", path: "(inline)"}, {label: "adversary_verdict", path: "(inline)"}])`.
+4. Call `bugfix:ticket-adapter:pr_close(state.pr_number, <close reason>)`. The close reason text differs between the two triggers:
+   - **critical:** reviewer's critical findings verbatim.
+   - **important-promoted:** "important findings promoted to blocking via `important_findings_block` config", followed by the reviewer's important findings verbatim.
+
+   The adapter posts the reason as a PR comment via `pr_comment --body-file -` then closes (per ticket-adapter §5.8 two-step).
+5. Emit `pr_closed` event with detail `{critical_findings: <count>, important_promoted: <bool>}`:
+   - For the critical path: `{critical_findings: <count from reviewer output>, important_promoted: false}`.
+   - For the important-promoted path: `{critical_findings: 0, important_promoted: true}`.
+
+   This emission must precede the next step — the JSONL events log must show `pr_closed` preceding `block_and_comment`.
+6. Invoke `bugfix:block-and-comment(rejected, reason=<short reason matching the close reason above>, questions=[], artifacts=[{label: "review_verdict", path: "(inline)"}])`.
    - `block-and-comment` will:
      - Persist `state.blocked_reason` etc.
-     - Call `ticket_comment` with its template (which references the adversary's critical findings).
+     - Call `ticket_comment` with its template (which references the reviewer's findings).
      - Call `set_status(state.issue_number, "rejected")`.
      - Emit `block_and_comment` event.
 7. Exit.
-
-### Branch C: `block` (any blocking decision-rule path)
-
-1. Set `state.artifacts.advocate_verdict` and `state.artifacts.adversary_verdict`.
-2. Set `state.updated_at = <now>`.
-3. Emit `pr_review_blocked` event (detail: `{reason: <short>, advocate: <verdict>, adversary: <verdict>}`).
-4. Invoke `bugfix:block-and-comment(needs-info, reason=<short>, questions=[<both verdicts, formatted>], artifacts=[{label: "advocate_verdict", path: "(inline)"}, {label: "adversary_verdict", path: "(inline)"}])`.
-   - `block-and-comment` handles the ticket comment and status set to `needs-info`.
-5. Exit.
 
 ## Configuration knobs
 
 All read from `.bugfix/runs/config.json`'s `pr_review` section. Defaults if absent:
 
-- `adversary_enabled` (default `true`): when `false`, only the advocate runs; adversary verdict treated as `clean`.
-- `important_findings_block` (default `false`): when `true`, important-but-not-critical adversary findings are treated as critical (block).
-- `advocate_must_run_regression_test` (default `true`): when `false`, advocate skips the regression-test empirical verification (prompt instructs accordingly). Useful for hosts without an executable test environment.
+- `important_findings_block` (default `false`): when `true`, important-but-not-critical findings are treated as critical (close the PR instead of rendering them as PR comments on a merge-ready outcome).
+- `reviewer_must_run_regression_test` (default `true`): when `false`, the reviewer skips the empirical base/PR-tip regression-test check (the dispatching skill appends a "skip empirical check" instruction to the substituted prompt). Useful for hosts without an executable test environment.
 
 These are declared in `bugfix/schemas/config.schema.json` under `pr_review.*`.
 
 ## State writes
 
 - `state.terminal = "merge-ready"` or `"pr-closed"` (terminal branches).
-- `state.artifacts.advocate_verdict = <text>`.
-- `state.artifacts.adversary_verdict = <text or null>`.
+- `state.artifacts.review_verdict = <text>`.
 - `state.updated_at = <now>`.
-- `state.blocked_reason` and `state.blocked_questions` written by `block-and-comment` (Branch C).
+- `state.blocked_reason` and `state.blocked_questions` written by `block-and-comment` (Branch B, when invoked).
 - No `current_stage` advance — this stage is terminal.
 
 All writes are read-modify-write of `.bugfix/runs/<ticket-id>.json`.
@@ -198,10 +186,11 @@ All writes are read-modify-write of `.bugfix/runs/<ticket-id>.json`.
 Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <event> pr-reviewing '<detail-json>'`:
 
 - `pr_rebased` (detail: `{}`) — after successful rebase, before Step 2.
-- `pr_review_started` (detail: `{adversary_enabled: <bool>}`) — at the start of Step 3.
-- `pr_merge_ready` (detail: `{advocate: <verdict>, adversary: <verdict>}`) — terminal merge-ready outcome.
-- `pr_closed` (detail: `{advocate: <verdict>, adversary_critical: <count>}`) — terminal pr-closed outcome, emitted BEFORE block-and-comment's `block_and_comment` event.
-- `pr_review_blocked` (detail: `{reason: <short>, advocate: <verdict>, adversary: <verdict>}`) — block-for-human-input outcome, emitted BEFORE block-and-comment's `block_and_comment` event.
+- `pr_review_started` (detail: `{}`) — at the end of Step 2, immediately before reviewer dispatch.
+- `pr_merge_ready` (detail: `{verdict: <"clean" | "important">}`) — terminal merge-ready outcome.
+- `pr_closed` (detail: `{critical_findings: <count>, important_promoted: <bool>}`) — terminal pr-closed outcome, emitted BEFORE block-and-comment's `block_and_comment` event.
+
+The needs-info path (which previously fired on inter-reviewer disagreement) is removed in this design. Tech-failures emit `block_and_comment` from the `block-and-comment` skill body.
 
 ## Block-and-comment exits
 
@@ -210,12 +199,12 @@ Emit via `bugfix/lib/events-append.sh ".bugfix/runs/<ticket-id>.events.log" <eve
 | `state.pr_number` or `base_branch` or `base_sha` null on entry | `tech-failure` | Upstream stage didn't initialize state |
 | `ticket-adapter:rebase_pr` returns `{success: false, conflicts: [...]}` | `tech-failure` | Cross-ticket conflict; do NOT auto-resolve |
 | `ticket-adapter:ci_status` returns `failure` or `pending` (unexpected since ci-watchdog passed) | `tech-failure` | CI regressed between ci-watchdog and pr-final-review |
-| Either reviewer sub-agent dispatch fails | `tech-failure` | Cannot proceed without verdicts |
-| Decision rule: row 4 (any + critical + advocate agrees) | `rejected` | Close PR; this is a normal terminal outcome, not a tech failure |
-| Decision rule: row 5 or 6 (disputes or Ready:no) | `needs-info` | Human resolves disagreement |
+| Reviewer sub-agent dispatch fails | `tech-failure` | Cannot proceed without a verdict |
+| Decision rule: verdict is `critical` | `rejected` | Close PR; this is a normal terminal outcome, not a tech failure |
+| Decision rule: verdict is `important` AND `important_findings_block == true` | `rejected` | Important findings promoted to blocking by config |
 | `set_status("ready-for-merge")` returns "label not found" | `tech-failure` | Operator must run first-run setup for the new label |
 
-**No auto-retry on any of these.** PR-level decisions are final.
+There is no `needs-info` exit from this stage. **No auto-retry on any of these.** PR-level decisions are final.
 
 ## Next stage
 

@@ -1,12 +1,12 @@
 # bugfix
 
-Autonomous bug-fix loop as a Claude skills plugin. From ticket to merge-ready PR with strong quality gates: spec-compliance review, code-quality review, mandatory regression-test-first plan, CI watchdog, and parallel advocate + adversary final PR review.
+Autonomous bug-fix loop as a Claude skills plugin. From ticket to merge-ready PR with strong quality gates: spec-compliance review, code-quality review, mandatory regression-test-first plan, CI watchdog, and a calibrated final PR review.
 
 ## Status
 
 **Production (Increments 1–7) — full autonomous loop runs end-to-end.**
 
-`fix bug <github-url>` → ticket-intake → planning → executing → autonomous-finishing → CI watching (with auto-fix on failure) → parallel advocate + adversary final review → terminal `merge-ready` (human merges manually), `pr-closed`, or human-resolves-block. Real-world tuning of adversary calibration comes after observing actual runs.
+`fix bug <github-url>` → ticket-intake → planning → executing → autonomous-finishing → CI watching (with auto-fix on failure) → calibrated final review → terminal `merge-ready` (human merges manually) or `pr-closed`. Real-world tuning of reviewer calibration comes after observing actual runs.
 
 ### Host requirements
 
@@ -77,7 +77,7 @@ The URL must be a GitHub **issue** URL (not a PR URL). Owner and repo names must
 
 ## Resuming a blocked ticket
 
-When the loop pauses for human input (an intake classification couldn't decide, a plan reviewer rejected three times, CI couldn't be auto-fixed, the adversary found something critical), the bot posts a comment on the issue describing what it needs. To resume:
+When the loop pauses for human input (an intake classification couldn't decide, a plan reviewer rejected three times, CI couldn't be auto-fixed, the final reviewer found something critical), the bot posts a comment on the issue describing what it needs. To resume:
 
 1. Read the bot's comment and provide whatever was requested (clarification, decision, manual fix).
 2. Add a new comment on the issue containing the single word `resume` as its first non-whitespace token. (Substring matches like "don't resume" or "resume tomorrow" do NOT trigger resumption — `resume` must be the leading token.)
@@ -100,9 +100,8 @@ Optional plugin-wide config lives at `.bugfix/runs/config.json` (per-project, no
     "planning": 2
   },
   "pr_review": {
-    "adversary_enabled": true,
     "important_findings_block": false,
-    "advocate_must_run_regression_test": true
+    "reviewer_must_run_regression_test": true
   },
   "model_hints": {
     "implementer": "opus"
@@ -147,7 +146,7 @@ State and events files are schema-validated by `bugfix/schemas/{run-state,events
 |---|---|
 | `gh CLI missing or not authenticated` | Install `gh` and run `gh auth login`. The adapter preflight requires both. |
 | Loop reaches `merge-ready` but doesn't merge | By design — humans merge manually. Look for the bot's `merge-ready` comment on the PR. |
-| Adversary always finds critical issues that auto-close the PR | Set `pr_review.adversary_enabled: false` in `.bugfix/runs/config.json` to kill-switch the adversary while you tune the prompt. |
+| Reviewer always finds critical issues that auto-close the PR | Tune the reviewer calibration by adjusting `pr_review.important_findings_block` in `.bugfix/runs/config.json`. |
 | Ticket comment with `resume` doesn't unblock | Verify the word `resume` is the first non-whitespace token on the first non-empty line. "yes, resume" or "please resume" does NOT trigger. |
 | `bugfix-status:* label not found` | Almost never happens (auto-create), but if it does: run the manual label-create commands from "First-run setup" above. |
 

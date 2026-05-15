@@ -16,7 +16,6 @@
   "retries": {},
   "artifacts": {
     "intake_classification": "bug",
-    "advocate_verdict": "Ready: yes",
-    "adversary_verdict": "clean"
+    "review_verdict": "clean"
   }
 }
