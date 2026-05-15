@@ -1,7 +1,7 @@
 {
   "name": "bugfix",
   "description": "Autonomous bug-fix loop as a Claude skills plugin. Ticket to merge-ready PR with spec-compliance review, code-quality review, mandatory regression-test-first plan, CI watchdog, and a calibrated final PR review.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "author": {
     "name": "Artur",
     "email": "artur@kodif.io"
